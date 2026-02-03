@@ -13,6 +13,12 @@ st.write("Enter customer details to predict if they are likely to churn.")
 # Load model and encoders
 @st.cache_resource
 def load_data():
+    """
+    Loads the trained model and label encoders from pickle files.
+    Returns:
+        model_data (dict): Dictionary containing the model and feature names.
+        encoders (dict): Dictionary of fitted LabelEncoders.
+    """
     with open('customer_churn_model.pkl', 'rb') as f:
         model_data = pickle.load(f)
     
