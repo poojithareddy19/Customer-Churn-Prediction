@@ -140,7 +140,8 @@ Month-to-month customers churn at roughly **15x** the rate of two-year customers
 │   └── training_report.json
 ├── Customer_Churn_Prediction_Using_ML.ipynb   # original EDA and first model (superseded by src/)
 ├── WA_Fn-UseC_-Telco-Customer-Churn.csv       # dataset
-├── requirements.txt
+├── requirements.txt                           # app and training dependencies
+├── requirements-dev.txt                       # adds pytest for running the tests
 └── README.md
 ```
 
@@ -181,9 +182,10 @@ set CHURN_FALSE_NEGATIVE_COST=1500
 python -m src.train
 ```
 
-Run the tests:
+Run the tests (installs pytest on top of the app dependencies):
 
 ```bash
+pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
