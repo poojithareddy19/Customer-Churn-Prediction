@@ -81,6 +81,9 @@ target/
 # Local conda environment
 .conda/
 
+# Claude Code local config
+.claude/
+
 # Legacy notebook pickles (the app uses artifacts/churn_model.joblib)
 *.pkl
 
