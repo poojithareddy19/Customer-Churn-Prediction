@@ -1,0 +1,243 @@
+{
+  "metric": "roc_auc",
+  "selection_reason": "ROC-AUC is threshold-independent and is the most reliable selector for the imbalanced churn target.",
+  "false_positive_cost_rupees": 65.0,
+  "false_negative_cost_rupees": 780.0,
+  "baseline_models": [
+    {
+      "model": "logistic_balanced",
+      "cv_roc_auc": 0.844328687192502
+    },
+    {
+      "model": "rf_balanced",
+      "cv_roc_auc": 0.8226968020214163
+    },
+    {
+      "model": "rf_smote",
+      "cv_roc_auc": 0.8216286775455078
+    },
+    {
+      "model": "xgb_smote",
+      "cv_roc_auc": 0.8157022189941896
+    },
+    {
+      "model": "xgb_balanced",
+      "cv_roc_auc": 0.8132001207729468
+    }
+  ],
+  "tuned_models": [
+    {
+      "model": "xgb_balanced_tuned",
+      "cv_roc_auc": 0.8480762060597966,
+      "best_params": {
+        "model__subsample": 0.85,
+        "model__reg_lambda": 5.0,
+        "model__n_estimators": 350,
+        "model__min_child_weight": 1,
+        "model__max_depth": 4,
+        "model__learning_rate": 0.01,
+        "model__colsample_bytree": 0.7
+      }
+    },
+    {
+      "model": "rf_balanced_tuned",
+      "cv_roc_auc": 0.8453060048828632,
+      "best_params": {
+        "model__n_estimators": 300,
+        "model__min_samples_split": 5,
+        "model__min_samples_leaf": 4,
+        "model__max_features": "sqrt",
+        "model__max_depth": 16
+      }
+    },
+    {
+      "model": "xgb_smote_tuned",
+      "cv_roc_auc": 0.8452922440021668,
+      "best_params": {
+        "model__subsample": 0.85,
+        "model__reg_lambda": 5.0,
+        "model__n_estimators": 350,
+        "model__min_child_weight": 1,
+        "model__max_depth": 4,
+        "model__learning_rate": 0.01,
+        "model__colsample_bytree": 0.7
+      }
+    },
+    {
+      "model": "rf_smote_tuned",
+      "cv_roc_auc": 0.8436731425825746,
+      "best_params": {
+        "smote__k_neighbors": 3,
+        "model__n_estimators": 200,
+        "model__min_samples_split": 2,
+        "model__min_samples_leaf": 4,
+        "model__max_features": "sqrt",
+        "model__max_depth": 8
+      }
+    }
+  ],
+  "best_model_name": "xgb_balanced_tuned",
+  "validation_threshold": {
+    "threshold": 0.08,
+    "expected_cost": 45760.0,
+    "false_positives": 560.0,
+    "false_negatives": 12.0
+  },
+  "validation_metrics": {
+    "roc_auc": 0.8595546255392803,
+    "brier_score": 0.13024184627525628,
+    "accuracy": 0.5940383250532293,
+    "false_positives": 560,
+    "false_negatives": 12,
+    "true_positives": 362,
+    "true_negatives": 475,
+    "classification_report": "              precision    recall  f1-score   support\n\n           0       0.98      0.46      0.62      1035\n           1       0.39      0.97      0.56       374\n\n    accuracy                           0.59      1409\n   macro avg       0.68      0.71      0.59      1409\nweighted avg       0.82      0.59      0.61      1409\n"
+  },
+  "test_threshold_from_cost_curve": {
+    "threshold": 0.05,
+    "expected_cost": 49400.0,
+    "false_positives": 652.0,
+    "false_negatives": 9.0
+  },
+  "test_metrics": {
+    "roc_auc": 0.8361272572270015,
+    "brier_score": 0.14015339832957754,
+    "accuracy": 0.6061036195883606,
+    "false_positives": 534,
+    "false_negatives": 21,
+    "true_positives": 353,
+    "true_negatives": 501,
+    "classification_report": "              precision    recall  f1-score   support\n\n           0       0.96      0.48      0.64      1035\n           1       0.40      0.94      0.56       374\n\n    accuracy                           0.61      1409\n   macro avg       0.68      0.71      0.60      1409\nweighted avg       0.81      0.61      0.62      1409\n"
+  },
+  "calibration_curve": [
+    {
+      "mean_predicted_probability": 0.04590384744546188,
+      "fraction_of_positives": 0.04363001745200698
+    },
+    {
+      "mean_predicted_probability": 0.14273730445196123,
+      "fraction_of_positives": 0.1881720430107527
+    },
+    {
+      "mean_predicted_probability": 0.24833633932231708,
+      "fraction_of_positives": 0.23404255319148937
+    },
+    {
+      "mean_predicted_probability": 0.3524682756048979,
+      "fraction_of_positives": 0.3983050847457627
+    },
+    {
+      "mean_predicted_probability": 0.4515164140935678,
+      "fraction_of_positives": 0.3564356435643564
+    },
+    {
+      "mean_predicted_probability": 0.5558702306123183,
+      "fraction_of_positives": 0.5412844036697247
+    },
+    {
+      "mean_predicted_probability": 0.6484628353235109,
+      "fraction_of_positives": 0.5737704918032787
+    },
+    {
+      "mean_predicted_probability": 0.7358061116115304,
+      "fraction_of_positives": 0.7547169811320755
+    }
+  ],
+  "permutation_importance": [
+    {
+      "feature": "Contract",
+      "importance_mean": 0.08671265080472249,
+      "importance_std": 0.008624984725925043
+    },
+    {
+      "feature": "tenure",
+      "importance_mean": 0.029636131132294928,
+      "importance_std": 0.003431715951485566
+    },
+    {
+      "feature": "InternetService",
+      "importance_mean": 0.016389211811206738,
+      "importance_std": 0.00346528454361487
+    },
+    {
+      "feature": "MonthlyCharges",
+      "importance_mean": 0.010081634761941705,
+      "importance_std": 0.002315381752730857
+    },
+    {
+      "feature": "TotalCharges",
+      "importance_mean": 0.007171071327081646,
+      "importance_std": 0.0021202156181103207
+    },
+    {
+      "feature": "OnlineSecurity",
+      "importance_mean": 0.005071559585626151,
+      "importance_std": 0.0021515946270213387
+    },
+    {
+      "feature": "TechSupport",
+      "importance_mean": 0.0022607145625049285,
+      "importance_std": 0.0016237168976285632
+    },
+    {
+      "feature": "StreamingMovies",
+      "importance_mean": 0.0017976439587693571,
+      "importance_std": 0.0005994574045804893
+    },
+    {
+      "feature": "StreamingTV",
+      "importance_mean": 0.0007104290991759687,
+      "importance_std": 0.000332100320141386
+    },
+    {
+      "feature": "SeniorCitizen",
+      "importance_mean": 0.0006621199204320582,
+      "importance_std": 0.00033802656798157183
+    },
+    {
+      "feature": "PaperlessBilling",
+      "importance_mean": 0.0006432612570721141,
+      "importance_std": 0.001787780639981034
+    },
+    {
+      "feature": "MultipleLines",
+      "importance_mean": 0.00048180009816846115,
+      "importance_std": 0.0006395902175156781
+    },
+    {
+      "feature": "PaymentMethod",
+      "importance_mean": 0.00019594926244550503,
+      "importance_std": 0.0016307081646932706
+    },
+    {
+      "feature": "PhoneService",
+      "importance_mean": 0.0001168978790462627,
+      "importance_std": 0.0002411125819297212
+    },
+    {
+      "feature": "gender",
+      "importance_mean": 4.6759151618591675e-05,
+      "importance_std": 0.00042054387563608274
+    },
+    {
+      "feature": "DeviceProtection",
+      "importance_mean": -2.2217055465079128e-05,
+      "importance_std": 0.00011480029647305043
+    },
+    {
+      "feature": "OnlineBackup",
+      "importance_mean": -0.00017360303805307175,
+      "importance_std": 0.0004996765006890506
+    },
+    {
+      "feature": "Dependents",
+      "importance_mean": -0.0003402309540416759,
+      "importance_std": 0.000646933696470163
+    },
+    {
+      "feature": "Partner",
+      "importance_mean": -0.00036593557053909986,
+      "importance_std": 0.0001982371057252963
+    }
+  ]
+}

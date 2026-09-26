@@ -1,119 +1,88 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import pickle
-from sklearn.preprocessing import LabelEncoder
+from __future__ import annotations
 
-# Set page config
+import streamlit as st
+
+from src.features import FORM_FIELDS, apply_internet_guard, build_input_frame
+from src.train import MODEL_PATH, load_or_train_bundle
+
 st.set_page_config(page_title="Customer Churn Prediction", layout="wide")
 
 st.title("Telco Customer Churn Prediction")
-st.write("Enter customer details to predict if they are likely to churn.")
+st.caption("A raw-feature pipeline trained from the Telco churn dataset and selected by ROC-AUC.")
 
-# Load model and encoders
+
 @st.cache_resource
-def load_data():
-    """
-    Loads the trained model and label encoders from pickle files.
-    Returns:
-        model_data (dict): Dictionary containing the model and feature names.
-        encoders (dict): Dictionary of fitted LabelEncoders.
-    """
-    with open('customer_churn_model.pkl', 'rb') as f:
-        model_data = pickle.load(f)
-    
-    with open('encoders.pkl', 'rb') as f:
-        encoders = pickle.load(f)
-        
-    return model_data, encoders
+def load_bundle():
+    return load_or_train_bundle()
 
-try:
-    model_data, encoders = load_data()
-    model = model_data['model']
-    feature_names = model_data['features_names']
-except FileNotFoundError:
-    st.error("Model or Encoder files not found. Please ensure 'customer_churn_model.pkl' and 'encoders.pkl' are in the directory.")
-    st.stop()
-except Exception as e:
-    st.error(f"Error loading model: {e}")
-    st.stop()
 
-# Input form
+if not MODEL_PATH.exists():
+    st.warning(
+        "No trained model found in artifacts/. Training will run now and can take several minutes. "
+        "Run `python -m src.train` once beforehand to avoid this on every fresh deployment."
+    )
+
+with st.spinner("Loading model..."):
+    bundle = load_bundle()
+model = bundle.model
+threshold = bundle.threshold
+report = bundle.report
+
+st.info(
+    f"Selection metric: ROC-AUC. Validation threshold from expected cost: {threshold:.2f}. "
+    f"Cost assumptions: wasted offer = {report['false_positive_cost_rupees']:,.0f}, missed churner = {report['false_negative_cost_rupees']:,.0f}."
+)
+
+with st.expander("Model summary", expanded=False):
+    st.write("Best model:", report["best_model_name"])
+    st.write("Cross-validated ROC-AUC (training folds):", round(report["tuned_models"][0]["cv_roc_auc"], 4))
+    if "validation_metrics" in report:
+        st.write("Validation ROC-AUC:", round(report["validation_metrics"]["roc_auc"], 4))
+    st.write("Test ROC-AUC:", round(report["test_metrics"]["roc_auc"], 4))
+    st.write("Test Brier score:", round(report["test_metrics"]["brier_score"], 4))
+
 with st.form("churn_prediction_form"):
     st.subheader("Customer Details")
-    
-    col1, col2 = st.columns(2)
+    columns = st.columns(3)
+    values = {}
 
-    with col1:
-        # High importance features
-        contract = st.selectbox("Contract", ["Month-to-month", "One year", "Two year"])
-        tenure = st.number_input("Tenure (months)", min_value=0, max_value=100, step=1)
-        online_security = st.selectbox("Online Security", ["No", "Yes", "No internet service"])
-        tech_support = st.selectbox("Tech Support", ["No", "Yes", "No internet service"])
-        internet_service = st.selectbox("Internet Service", ["DSL", "Fiber optic", "No"])
+    for index, field in enumerate(FORM_FIELDS):
+        column = columns[index % 3]
+        with column:
+            if field.field_type == "select":
+                values[field.name] = st.selectbox(field.label, field.options, index=field.options.index(field.default))
+            else:
+                values[field.name] = st.number_input(
+                    field.label,
+                    min_value=field.min_value,
+                    max_value=field.max_value,
+                    value=field.default,
+                    step=field.step,
+                    format=field.format,
+                )
 
-    with col2:
-        payment_method = st.selectbox("Payment Method", ["Electronic check", "Mailed check", "Bank transfer (automatic)", "Credit card (automatic)"])
-        monthly_charges = st.number_input("Monthly Charges", min_value=0.0, format="%.2f")
-        total_charges = st.number_input("Total Charges", min_value=0.0, format="%.2f")
-        online_backup = st.selectbox("Online Backup", ["Yes", "No", "No internet service"])
-        dependents = st.selectbox("Dependents", ["Yes", "No"])
-    
-    submit_button = st.form_submit_button("Predict Churn")
+    slider_threshold = st.slider("Decision threshold", min_value=0.0, max_value=1.0, value=float(threshold), step=0.01)
+    submit_button = st.form_submit_button("Predict churn risk")
 
 if submit_button:
-    # Prepare input data dictionary with user inputs and defaults for hidden columns
-    # Defaults based on mode (most frequent value) or low feature importance analysis
-    input_data = {
-        'gender': 'Male',             # Default/Hidden (Low Importance)
-        'SeniorCitizen': 0,           # Default/Hidden (Low Importance)
-        'Partner': 'No',              # Default/Hidden (Low Importance)
-        'Dependents': dependents,
-        'tenure': tenure,
-        'PhoneService': 'Yes',        # Default/Hidden (Low Importance)
-        'MultipleLines': 'No',        # Default/Hidden (Low Importance)
-        'InternetService': internet_service,
-        'OnlineSecurity': online_security,
-        'OnlineBackup': online_backup,
-        'DeviceProtection': 'No',     # Default/Hidden (Low Importance)
-        'TechSupport': tech_support,
-        'StreamingTV': 'No',          # Default/Hidden (Low Importance)
-        'StreamingMovies': 'No',      # Default/Hidden (Low Importance)
-        'Contract': contract,
-        'PaperlessBilling': 'Yes',    # Default/Hidden (Low Importance)
-        'PaymentMethod': payment_method,
-        'MonthlyCharges': monthly_charges,
-        'TotalCharges': total_charges
-    }
-    
-    # Convert to DataFrame
-    input_df = pd.DataFrame([input_data])
-    
-    # Preprocessing
-    try:
-        # Encode categorical variables using loaded encoders
-        for col, encoder in encoders.items():
-            if col in input_df.columns:
-                # Handle unknown labels if necessary, though selectboxes constrain inputs to known values usually
-                # To be safe, we map values, but selectboxes match Training data unique values
-                input_df[col] = encoder.transform(input_df[col].astype(str))
-        
-        # Ensure column order matches training
-        input_df = input_df[feature_names]
-        
-        # Prediction
-        prediction = model.predict(input_df)
-        prediction_proba = model.predict_proba(input_df)
-        
-        churn_prob = prediction_proba[0][1]
-        
-        st.subheader("Prediction Result")
-        if prediction[0] == 1:
-            st.error(f"High Risk of Churn! (Probability: {churn_prob:.2%})")
-        else:
-            st.success(f"Low Risk of Churn. (Probability: {churn_prob:.2%})")
-            
-    except Exception as e:
-        st.error(f"Error during prediction: {e}")
-        st.write("Debug info: Feature names expected:", feature_names)
-        st.write("Input columns:", input_df.columns.tolist())
+    guarded_values = apply_internet_guard(values)
+    input_frame = build_input_frame(guarded_values)
+    churn_probability = float(model.predict_proba(input_frame)[0, 1])
+    churn_prediction = int(churn_probability >= slider_threshold)
+    # Cost of each possible decision, so the two numbers can be compared directly.
+    cost_if_not_contacted = report["false_negative_cost_rupees"] * churn_probability
+    cost_if_contacted = report["false_positive_cost_rupees"] * (1 - churn_probability)
+
+    st.subheader("Prediction Result")
+    if churn_prediction:
+        st.error(f"High churn risk: {churn_probability:.1%} probability")
+    else:
+        st.success(f"Lower churn risk: {churn_probability:.1%} probability")
+
+    cost_columns = st.columns(2)
+    cost_columns[0].metric("Expected cost if not contacted", f"{cost_if_not_contacted:,.0f}")
+    cost_columns[1].metric("Expected cost if contacted", f"{cost_if_contacted:,.0f}")
+    st.write("Prediction threshold used:", f"{slider_threshold:.2f}")
+
+    with st.expander("Applied input guard", expanded=False):
+        st.write(guarded_values)
