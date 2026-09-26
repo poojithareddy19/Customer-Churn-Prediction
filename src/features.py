@@ -162,6 +162,8 @@ def apply_internet_guard(values: dict[str, Any]) -> dict[str, Any]:
     return guarded
 
 
-def build_input_frame(values: dict[str, Any]) -> pd.DataFrame:
-    normalized = {column: values[column] for column in FEATURE_COLUMNS}
-    return pd.DataFrame([normalized], columns=FEATURE_COLUMNS)
+def build_input_frame(values: dict[str, Any], feature_columns: list[str] | None = None) -> pd.DataFrame:
+    # Pass the column list saved with the model so the frame matches what the model was trained on.
+    columns = list(feature_columns) if feature_columns is not None else FEATURE_COLUMNS
+    normalized = {column: values[column] for column in columns}
+    return pd.DataFrame([normalized], columns=columns)

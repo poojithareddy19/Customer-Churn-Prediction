@@ -134,7 +134,8 @@ Month-to-month customers churn at roughly **15x** the rate of two-year customers
 │   └── evaluate.py                            # metrics, cost curve, calibration table, permutation importance
 ├── tests/
 │   ├── test_features.py
-│   └── test_evaluate.py
+│   ├── test_evaluate.py
+│   └── test_train.py
 ├── artifacts/                                 # committed; regenerate with python -m src.train
 │   ├── churn_model.joblib                     # {model, threshold, report, feature_columns}
 │   └── training_report.json
@@ -174,11 +175,26 @@ python -m streamlit run app.py
 
 If `artifacts/churn_model.joblib` is ever missing, the app trains on first load and shows a warning while it does so.
 
-The decision costs can be overridden without editing code. Set the variables before training and the threshold is recomputed:
+The decision costs can be overridden without editing code. Set the variables in the same terminal before training and the threshold is recomputed. The app reads the costs saved with the model, so restart it after retraining.
 
-```bash
+```powershell
+# Windows PowerShell
+$env:CHURN_FALSE_POSITIVE_COST = "100"
+$env:CHURN_FALSE_NEGATIVE_COST = "1500"
+python -m src.train
+```
+
+```bat
+:: Windows Command Prompt (cmd.exe)
 set CHURN_FALSE_POSITIVE_COST=100
 set CHURN_FALSE_NEGATIVE_COST=1500
+python -m src.train
+```
+
+```bash
+# macOS / Linux
+export CHURN_FALSE_POSITIVE_COST=100
+export CHURN_FALSE_NEGATIVE_COST=1500
 python -m src.train
 ```
 

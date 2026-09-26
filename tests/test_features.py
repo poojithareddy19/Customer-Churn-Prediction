@@ -36,6 +36,13 @@ def test_build_input_frame_keeps_training_column_order():
     assert list(frame.columns) == FEATURE_COLUMNS
 
 
+def test_build_input_frame_uses_given_column_list():
+    values = {column: 0 if column in {"SeniorCitizen", "tenure", "MonthlyCharges", "TotalCharges"} else "No" for column in FEATURE_COLUMNS}
+    saved_columns = list(reversed(FEATURE_COLUMNS))
+    frame = build_input_frame(values, saved_columns)
+    assert list(frame.columns) == saved_columns
+
+
 def test_phone_guard_forces_multiple_lines_to_no_phone_service():
     guarded = apply_internet_guard({"PhoneService": "No", "MultipleLines": "Yes", "InternetService": "DSL"})
     assert guarded["MultipleLines"] == "No phone service"

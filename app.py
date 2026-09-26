@@ -66,7 +66,7 @@ with st.form("churn_prediction_form"):
 
 if submit_button:
     guarded_values = apply_internet_guard(values)
-    input_frame = build_input_frame(guarded_values)
+    input_frame = build_input_frame(guarded_values, bundle.feature_columns)
     churn_probability = float(model.predict_proba(input_frame)[0, 1])
     churn_prediction = int(churn_probability >= slider_threshold)
     # Cost of each possible decision, so the two numbers can be compared directly.

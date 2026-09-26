@@ -48,6 +48,7 @@ class TrainingBundle:
     model: Any
     threshold: float
     report: dict[str, Any]
+    feature_columns: list[str]
 
 
 def _candidate_pipelines(random_state: int, positive_ratio: float) -> dict[str, Any]:
@@ -281,13 +282,24 @@ def train_model(random_state: int = 42) -> TrainingBundle:
     )
     REPORT_PATH.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
-    return TrainingBundle(model=final_calibrated, threshold=best_threshold["threshold"], report=report)
+    return TrainingBundle(
+        model=final_calibrated,
+        threshold=best_threshold["threshold"],
+        report=report,
+        feature_columns=list(FEATURE_COLUMNS),
+    )
 
 
 def load_or_train_bundle(force_retrain: bool = False) -> TrainingBundle:
     if MODEL_PATH.exists() and not force_retrain:
         bundle = joblib.load(MODEL_PATH)
-        return TrainingBundle(model=bundle["model"], threshold=float(bundle["threshold"]), report=bundle["report"])
+        return TrainingBundle(
+            model=bundle["model"],
+            threshold=float(bundle["threshold"]),
+            report=bundle["report"],
+            # Artifacts saved before feature_columns was stored fall back to the current schema.
+            feature_columns=list(bundle.get("feature_columns", FEATURE_COLUMNS)),
+        )
     return train_model()
 
 
