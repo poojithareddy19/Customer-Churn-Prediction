@@ -1,6 +1,9 @@
 """Helpers for app.py that do not depend on Streamlit, so they can be unit tested."""
 from __future__ import annotations
 
+import json
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -15,6 +18,30 @@ def report_cost(report: dict[str, Any], kind: str) -> float:
     if f"{kind}_cost" in report:
         return float(report[f"{kind}_cost"])
     return float(report[f"{kind}_cost_rupees"])
+
+
+def log_prediction(
+    log_path: Path,
+    inputs: dict[str, Any],
+    probability: float,
+    decision_rule: str,
+    threshold: float,
+    verdict: str,
+) -> dict[str, Any]:
+    """Append one prediction as a JSON line with a UTC timestamp and return the record."""
+    record = {
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "inputs": inputs,
+        "probability": float(probability),
+        "decision_rule": decision_rule,
+        "threshold": float(threshold),
+        "verdict": verdict,
+    }
+    log_path = Path(log_path)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, default=str) + "\n")
+    return record
 
 
 def explain_prediction(

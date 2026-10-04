@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -48,7 +50,8 @@ from src.features import (
     split_features_target,
 )
 
-ARTIFACT_DIR = Path(__file__).resolve().parents[1] / "artifacts"
+ROOT = Path(__file__).resolve().parents[1]
+ARTIFACT_DIR = ROOT / "artifacts"
 MODEL_PATH = ARTIFACT_DIR / "churn_model.joblib"
 REPORT_PATH = ARTIFACT_DIR / "training_report.json"
 PROFIT_SENSITIVITY_RATES = (0.1, 0.2, 0.3, 0.5)
@@ -256,11 +259,11 @@ def _xgb_search_space() -> dict[str, list[Any]]:
     }
 
 
-def _search_model(pipeline, search_space: dict[str, list[Any]], features, target, cv) -> RandomizedSearchCV:
+def _search_model(pipeline, search_space: dict[str, list[Any]], features, target, cv, n_iter: int = 10) -> RandomizedSearchCV:
     search = RandomizedSearchCV(
         estimator=pipeline,
         param_distributions=search_space,
-        n_iter=10,
+        n_iter=n_iter,
         scoring="roc_auc",
         cv=cv,
         n_jobs=-1,
@@ -324,8 +327,67 @@ def _profit_analysis(evaluation: CalibratedEvaluation, splits: DataSplits) -> di
     }
 
 
-def train_model(random_state: int = 42) -> TrainingBundle:
-    frame = load_dataset(DATASET_PATH)
+def _git_state() -> dict[str, Any]:
+    """Commit hash of the code that trained the model, or None outside a git checkout."""
+    try:
+        commit = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True, timeout=10
+        ).stdout.strip()
+        status = subprocess.run(
+            ["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True, check=True, timeout=10
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return {"git_commit": None, "git_dirty": None}
+    return {"git_commit": commit, "git_dirty": bool(status)}
+
+
+def _log_to_mlflow(report: dict[str, Any], best_params: dict[str, Any]) -> None:
+    """Log the run to MLflow when it is installed (requirements-dev.txt); otherwise do nothing."""
+    try:
+        import mlflow
+    except ImportError:
+        return
+    test_metrics = report["test_metrics"]
+    positives = test_metrics["true_positives"] + test_metrics["false_negatives"]
+    flagged = test_metrics["true_positives"] + test_metrics["false_positives"]
+    try:
+        mlflow.set_experiment("customer-churn")
+        with mlflow.start_run(run_name=report["best_model_name"]):
+            mlflow.log_params(
+                {
+                    "model_name": report["best_model_name"],
+                    "false_positive_cost": report["false_positive_cost"],
+                    "false_negative_cost": report["false_negative_cost"],
+                    "threshold": report["validation_threshold"]["threshold"],
+                    **{name.removeprefix("model__"): value for name, value in best_params.items()},
+                }
+            )
+            mlflow.log_metrics(
+                {
+                    "cv_roc_auc": report["tuned_models"][0]["cv_roc_auc"],
+                    "test_roc_auc": test_metrics["roc_auc"],
+                    "test_brier_score": test_metrics["brier_score"],
+                    "test_recall": test_metrics["true_positives"] / positives if positives else 0.0,
+                    "test_precision": test_metrics["true_positives"] / flagged if flagged else 0.0,
+                }
+            )
+    except Exception as error:  # Tracking problems must not fail training.
+        print(f"MLflow logging skipped: {error}")
+
+
+def train_model(
+    random_state: int = 42,
+    data: pd.DataFrame | None = None,
+    n_iter: int = 10,
+    artifact_dir: Path | None = None,
+) -> TrainingBundle:
+    """Train, select, calibrate and save the model.
+
+    data must look like load_dataset() output; it defaults to the full dataset. n_iter is the number of
+    randomised search iterations per model family. artifact_dir defaults to artifacts/.
+    """
+    run_timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    frame = load_dataset(DATASET_PATH) if data is None else data
     features, target = split_features_target(frame)
 
     splits = split_data(features, target, random_state)
@@ -345,11 +407,13 @@ def train_model(random_state: int = 42) -> TrainingBundle:
 
     baseline_frame = pd.DataFrame(baseline_rows).sort_values("cv_roc_auc", ascending=False).reset_index(drop=True)
 
-    rf_search = _search_model(candidates["rf_balanced"], _rf_search_space(), train_features, train_target, cv)
-    rf_smote_search = _search_model(candidates["rf_smote"], _rf_smote_search_space(), train_features, train_target, cv)
-    xgb_search = _search_model(candidates["xgb_balanced"], _xgb_search_space(), train_features, train_target, cv)
-    xgb_smote_search = _search_model(candidates["xgb_smote"], _xgb_search_space(), train_features, train_target, cv)
-    logistic_search = _search_model(candidates["logistic_balanced"], _logistic_search_space(), train_features, train_target, cv)
+    rf_search = _search_model(candidates["rf_balanced"], _rf_search_space(), train_features, train_target, cv, n_iter)
+    rf_smote_search = _search_model(candidates["rf_smote"], _rf_smote_search_space(), train_features, train_target, cv, n_iter)
+    xgb_search = _search_model(candidates["xgb_balanced"], _xgb_search_space(), train_features, train_target, cv, n_iter)
+    xgb_smote_search = _search_model(candidates["xgb_smote"], _xgb_search_space(), train_features, train_target, cv, n_iter)
+    logistic_search = _search_model(
+        candidates["logistic_balanced"], _logistic_search_space(), train_features, train_target, cv, n_iter
+    )
 
     tuned_frame = pd.DataFrame(
         [
@@ -416,9 +480,12 @@ def train_model(random_state: int = 42) -> TrainingBundle:
         "model_comparison": model_comparison,
         "logistic_odds_ratios": odds_ratios.to_dict(orient="records"),
         "profit_analysis": _profit_analysis(evaluation, splits),
+        "run_timestamp": run_timestamp,
+        **_git_state(),
     }
 
-    ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
+    output_dir = ARTIFACT_DIR if artifact_dir is None else Path(artifact_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
     joblib.dump(
         {
             "model": final_calibrated,
@@ -426,9 +493,10 @@ def train_model(random_state: int = 42) -> TrainingBundle:
             "report": report,
             "feature_columns": FEATURE_COLUMNS,
         },
-        MODEL_PATH,
+        output_dir / MODEL_PATH.name,
     )
-    REPORT_PATH.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    (output_dir / REPORT_PATH.name).write_text(json.dumps(report, indent=2), encoding="utf-8")
+    _log_to_mlflow(report, best_search.best_params_)
 
     return TrainingBundle(
         model=final_calibrated,

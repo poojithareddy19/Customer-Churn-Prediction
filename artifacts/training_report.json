@@ -703,5 +703,8 @@
         "test_profit": 102068.30000000002
       }
     ]
-  }
+  },
+  "run_timestamp": "2026-10-04T05:26:28+00:00",
+  "git_commit": "40268e96b00768e2a1697972f038476b06fab021",
+  "git_dirty": true
 }

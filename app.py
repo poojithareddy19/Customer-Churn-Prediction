@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 
-from src.app_helpers import explain_prediction, report_cost
+from src.app_helpers import explain_prediction, log_prediction, report_cost
 from src.features import FORM_FIELDS, apply_internet_guard, build_input_frame, load_dataset
 from src.train import MODEL_PATH, load_or_train_bundle
 
 COST_RULE = "Cost threshold"
 CAPACITY_RULE = "Capacity (top N%)"
+PREDICTION_LOG_PATH = Path(__file__).resolve().parent / "logs" / "predictions.jsonl"
 
 st.set_page_config(page_title="Customer Churn Prediction", layout="wide")
 
@@ -113,6 +116,12 @@ if submit_button:
     # Cost of each possible decision, so the two numbers can be compared directly.
     cost_if_not_contacted = false_negative_cost * churn_probability
     cost_if_contacted = false_positive_cost * (1 - churn_probability)
+
+    verdict = "high risk" if churn_prediction else "lower risk"
+    try:
+        log_prediction(PREDICTION_LOG_PATH, guarded_values, churn_probability, decision_rule, decision_threshold, verdict)
+    except Exception as error:  # Logging must never break a prediction.
+        st.caption(f"Warning: prediction was not logged ({type(error).__name__}).")
 
     st.subheader("Prediction Result")
     if churn_prediction:

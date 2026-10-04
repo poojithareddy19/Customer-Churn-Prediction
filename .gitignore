@@ -87,6 +87,13 @@ target/
 # Legacy notebook pickles (the app uses artifacts/churn_model.joblib)
 *.pkl
 
+# App prediction logs
+logs/
+
+# MLflow tracking (MLflow 3 defaults to a local mlflow.db; older versions used mlruns/)
+mlruns/
+mlflow.db
+
 # IPython
 profile_default/
 ipython_config.py

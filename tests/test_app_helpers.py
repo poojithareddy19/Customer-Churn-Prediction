@@ -67,3 +67,20 @@ def test_explain_prediction_supports_logistic_regression():
     assert len(explanation) == 5
     with pytest.raises(ValueError):
         explain_prediction(calibrated, features.head(1), background=None)
+
+
+def test_log_prediction_appends_json_lines(tmp_path):
+    import json
+
+    from src.app_helpers import log_prediction
+
+    log_path = tmp_path / "logs" / "predictions.jsonl"
+    log_prediction(log_path, {"tenure": 12, "Contract": "Month-to-month"}, 0.42, "Cost threshold", 0.08, "high risk")
+    log_prediction(log_path, {"tenure": 60, "Contract": "Two year"}, 0.03, "Capacity (top N%)", 0.67, "lower risk")
+
+    records = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+    assert len(records) == 2
+    assert records[0]["inputs"]["Contract"] == "Month-to-month"
+    assert records[1]["decision_rule"] == "Capacity (top N%)"
+    assert records[0]["timestamp_utc"].endswith("+00:00")
+    assert set(records[0]) == {"timestamp_utc", "inputs", "probability", "decision_rule", "threshold", "verdict"}
