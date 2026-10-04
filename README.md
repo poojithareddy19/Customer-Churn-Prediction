@@ -1,10 +1,13 @@
 # Telco Customer Churn Prediction
 
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://customer-churn-risk-app.streamlit.app)
 [![CI](https://github.com/poojithareddy19/Customer-Churn-Prediction/actions/workflows/ci.yml/badge.svg)](https://github.com/poojithareddy19/Customer-Churn-Prediction/actions/workflows/ci.yml)
 ![Python 3.11](https://img.shields.io/badge/python-3.11-blue)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 
 Predicts whether a telecom customer is likely to churn, using a calibrated gradient-boosting pipeline trained on the IBM Telco Customer Churn dataset and served through a Streamlit interface that returns a churn probability, a risk verdict, the expected cost of contacting or not contacting the customer, and the main reasons behind the score.
+
+**Live demo:** [customer-churn-risk-app.streamlit.app](https://customer-churn-risk-app.streamlit.app)
 
 Five candidate pipelines were compared under 5-fold stratified cross-validation, logistic regression, Random Forest and XGBoost variants were tuned with randomised search, and the winner was calibrated and evaluated on a held-out test set. **Test ROC-AUC 0.836 (95% CI 0.815 to 0.859)**, against a majority-class baseline that catches zero churners.
 
