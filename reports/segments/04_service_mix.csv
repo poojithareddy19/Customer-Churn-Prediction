@@ -1,0 +1,10 @@
+internet_service,online_security,tech_support,customers,churners,churn_rate,churn_rate_ci_lower,churn_rate_ci_upper
+Fiber optic,No,No,1765,971,0.550142,0.526849,0.573216
+DSL,No,No,788,279,0.354061,0.321452,0.388086
+Fiber optic,No,Yes,492,143,0.290650,0.252273,0.332271
+Fiber optic,Yes,No,465,130,0.279570,0.240712,0.322040
+DSL,No,Yes,453,68,0.150110,0.120168,0.185937
+DSL,Yes,No,455,66,0.145055,0.115668,0.180385
+Fiber optic,Yes,Yes,374,53,0.141711,0.110001,0.180707
+No,No internet service,No internet service,1526,113,0.074050,0.061954,0.088284
+DSL,Yes,Yes,725,46,0.063448,0.047903,0.083595

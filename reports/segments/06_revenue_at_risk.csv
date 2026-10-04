@@ -1,0 +1,4 @@
+contract,customers,churners,churn_rate,churn_rate_ci_lower,churn_rate_ci_upper,churned_monthly_revenue,share_of_lost_revenue,cumulative_share_of_lost_revenue
+Month-to-month,3875,1655,0.427097,0.411602,0.442736,120847.100000,0.868586,0.868586
+One year,1473,166,0.112695,0.097544,0.129862,14118.450000,0.101476,0.970062
+Two year,1695,48,0.028319,0.021425,0.037345,4165.300000,0.029938,1.000000

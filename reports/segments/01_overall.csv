@@ -1,0 +1,2 @@
+customers,churners,churn_rate,churn_rate_ci_lower,churn_rate_ci_upper
+7043,1869,0.265370,0.255188,0.275807

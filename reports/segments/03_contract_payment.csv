@@ -1,0 +1,13 @@
+contract,payment_method,customers,churners,churn_rate,churn_rate_ci_lower,churn_rate_ci_upper,share_of_all_churners
+Month-to-month,Electronic check,1850,994,0.537297,0.514523,0.559917,0.531835
+Month-to-month,Bank transfer (automatic),589,201,0.341256,0.304105,0.380465,0.107544
+Month-to-month,Credit card (automatic),543,178,0.327808,0.289656,0.368380,0.095238
+Month-to-month,Mailed check,893,282,0.315789,0.286147,0.347010,0.150883
+One year,Electronic check,347,64,0.184438,0.147163,0.228623,0.034243
+One year,Credit card (automatic),398,41,0.103015,0.076848,0.136772,0.021937
+One year,Bank transfer (automatic),391,38,0.097187,0.071627,0.130585,0.020332
+Two year,Electronic check,168,13,0.077381,0.045777,0.127880,0.006956
+One year,Mailed check,337,23,0.068249,0.045905,0.100325,0.012306
+Two year,Bank transfer (automatic),564,19,0.033688,0.021671,0.052014,0.010166
+Two year,Credit card (automatic),581,13,0.022375,0.013122,0.037903,0.006956
+Two year,Mailed check,382,3,0.007853,0.002674,0.022832,0.001605
