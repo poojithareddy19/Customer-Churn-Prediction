@@ -20,6 +20,14 @@ def report_cost(report: dict[str, Any], kind: str) -> float:
     return float(report[f"{kind}_cost_rupees"])
 
 
+def profit_threshold(report: dict[str, Any]) -> float | None:
+    """Validation-chosen profit-maximising threshold; None for artifacts trained before the profit analysis."""
+    profit_analysis = report.get("profit_analysis")
+    if profit_analysis is None:
+        return None
+    return float(profit_analysis["validation_threshold"])
+
+
 def log_prediction(
     log_path: Path,
     inputs: dict[str, Any],

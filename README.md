@@ -1,8 +1,16 @@
 # Telco Customer Churn Prediction
 
+[![CI](https://github.com/poojithareddy19/Customer-Churn-Prediction/actions/workflows/ci.yml/badge.svg)](https://github.com/poojithareddy19/Customer-Churn-Prediction/actions/workflows/ci.yml)
+![Python 3.11](https://img.shields.io/badge/python-3.11-blue)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
+
 Predicts whether a telecom customer is likely to churn, using a calibrated gradient-boosting pipeline trained on the IBM Telco Customer Churn dataset and served through a Streamlit interface that returns a churn probability, a risk verdict, the expected cost of contacting or not contacting the customer, and the main reasons behind the score.
 
 Five candidate pipelines were compared under 5-fold stratified cross-validation, logistic regression, Random Forest and XGBoost variants were tuned with randomised search, and the winner was calibrated and evaluated on a held-out test set. **Test ROC-AUC 0.836 (95% CI 0.815 to 0.859)**, against a majority-class baseline that catches zero churners.
+
+<p align="center">
+  <img src="docs/images/app_prediction.png" alt="Streamlit app showing a 56.5% churn probability for a month-to-month fiber customer, flagged as high risk at the 0.34 profit threshold, with the top SHAP reasons" width="720">
+</p>
 
 ---
 
@@ -25,7 +33,7 @@ These are correlations in a single snapshot. They show where churn is concentrat
 | --- | --- | --- |
 | ROC-AUC (ranking quality) | 0.836 | 0.815 to 0.859 |
 | Top-decile lift (churn rate in the riskiest 10% vs average) | 2.73x | 2.45x to 3.04x |
-| Churners caught at the deployed threshold (recall) | 94.4% | 92.1% to 96.5% |
+| Churners caught at the 0.08 cost threshold (recall) | 94.4% | 92.1% to 96.5% |
 | Flagged customers who do churn (precision) | 39.8% | 36.4% to 43.0% |
 
 Across five different random splits the test ROC-AUC averages 0.848 (standard deviation 0.009, `reports/seed_stability.csv`), so the headline 0.836 is at the low end, not a lucky split.
@@ -37,11 +45,11 @@ Across five different random splits the test ROC-AUC averages 0.848 (standard de
 | Top 10% by risk | 10% | 27.3% | 72.3% |
 | Top 20% by risk | 20% | 48.4% | 64.2% |
 | Top 40% by risk | 40% | 79.1% | 52.5% |
-| Profit-maximising threshold 0.34 (30% offer success assumed) | 37.1% | 75.1% | 53.7% |
-| Cost threshold 0.08 (deployed default) | 63.0% | 94.4% | 39.8% |
+| Profit threshold 0.34, app default (30% offer success assumed) | 37.1% | 75.1% | 53.7% |
+| Cost threshold 0.08 | 63.0% | 94.4% | 39.8% |
 
 - If the retention team has a fixed capacity, contact the top N% by score. The top 20% reaches almost half of all churners at 2.4 times the average churn rate.
-- The deployed cost threshold (0.08) is the cheapest rule under its own assumptions, but those assumptions treat every contacted churner as saved. The profit model below assumes only 30% are saved and recommends contacting far fewer customers (threshold 0.34). Until the real offer success rate is known, the profit threshold or a top 30% to 40% capacity rule is the more defensible starting point.
+- The cost threshold (0.08) is the cheapest rule under its own assumptions, but those assumptions treat every contacted churner as saved. The profit model below assumes only 30% are saved and recommends contacting far fewer customers (threshold 0.34). Until the real offer success rate is known, the profit threshold is the more defensible starting point, so the app uses it by default. The cost and capacity rules are one click away.
 
 **Expected profit under stated assumptions** (`profit_analysis` in the report)
 
@@ -54,11 +62,11 @@ Assumptions: an offer costs 65, a saved customer is worth 12 months of their own
 | 30% (default) | 0.34 | 523 | 42,869.50 |
 | 50% | 0.18 | 674 | 102,068.30 |
 
-At the deployed cost threshold the 30% scenario earns 38,107.70 on the test split, less than the 42,869.50 from the profit threshold. At a 10% success rate the campaign barely breaks even, so the success rate is the number that most needs measuring.
+At the cost threshold the 30% scenario earns 38,107.70 on the test split, less than the 42,869.50 from the profit threshold. At a 10% success rate the campaign barely breaks even, so the success rate is the number that most needs measuring.
 
 **Proposed experiment** ([docs/experiment_plan.md](docs/experiment_plan.md))
 
-A 50/50 randomised test of the offer on model-flagged customers, measuring 90-day retention. Detecting a 5 percentage point lift over the 60.2% baseline retention of flagged customers needs 1,467 customers per arm. A simulated readout of the analysis is in `reports/SIMULATED_experiment_readout.md`; it uses made-up outcomes and is not evidence about the offer.
+A 50/50 randomised test of the offer on model-flagged customers, measuring 90-day retention. Detecting a 5 percentage point lift over the 60.2% baseline retention of flagged customers needs 1,467 customers per arm.
 
 **Limitations**
 
@@ -107,13 +115,18 @@ All training and inference code lives in `src/`. The notebook is kept as the ori
    The calibrated pipeline, the threshold, the feature column order, and the full report are saved together to `artifacts/churn_model.joblib`. A human-readable copy of the report is written to `artifacts/training_report.json`, with the run timestamp and git commit. If MLflow is installed (`requirements-dev.txt`), the run is also logged there.
 
 9. **Deployment** (`app.py`)
-   Streamlit app that loads the artifact, exposes all 19 inputs, applies consistency guards (no internet service implies no add-ons, no phone service implies no multiple lines), and shows the probability, verdict, and expected cost of each decision. The decision rule is either the cost threshold (adjustable with a slider) or a capacity rule (top N% by score). A "Why this score?" panel shows the top five SHAP contributions, and every prediction is appended to `logs/predictions.jsonl`.
+   Streamlit app that loads the artifact, exposes all 19 inputs, applies consistency guards (no internet service implies no add-ons, no phone service implies no multiple lines), and shows the probability, verdict, and expected cost of each decision. Three decision rules are offered: the profit threshold (the default, 0.34) and the cost threshold (0.08), both adjustable with a slider, and a capacity rule (top N% by score). A "Why this score?" panel shows the top five SHAP contributions, and every prediction is appended to `logs/predictions.jsonl`.
 
 ---
 
 ## Results
 
-All numbers come from `artifacts/training_report.json` and the files in `reports/`, and are reproducible with the commands under Usage.
+All numbers come from `artifacts/training_report.json` and the files in `reports/`, and are reproducible with the commands under Usage. Threshold-dependent metrics below (recall, precision, confusion matrix, bootstrap intervals) are reported at the 0.08 cost threshold that is saved with the model.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/model_charts_dark.png">
+  <img src="docs/images/model_charts_light.png" alt="Left: test churn rate by risk decile, falling from 72.3% in the riskiest decile to under 5% in deciles 8 to 10, against a 26.5% average. Right: calibration curve close to the diagonal.">
+</picture>
 
 ### Candidate comparison, 5-fold cross-validated ROC-AUC on the training split
 
@@ -140,7 +153,7 @@ Class-weighted XGBoost was selected after tuning (350 shallow trees, depth 4, le
 | Precision (churn) at 0.08 | 0.39               | 0.40         |
 | Accuracy at 0.08          | 0.594              | 0.606        |
 
-Test confusion matrix at the deployed threshold of 0.08:
+Test confusion matrix at the cost threshold of 0.08:
 
 ```
               predicted
@@ -153,7 +166,7 @@ actual  no   501    534
 
 ### Uncertainty and stability
 
-Bootstrap 95% percentile intervals on the test split (1,000 resamples, seed 42, no resample skipped), at the deployed threshold of 0.08:
+Bootstrap 95% percentile intervals on the test split (1,000 resamples, seed 42, no resample skipped), at the cost threshold of 0.08:
 
 | Metric          | Estimate | 95% CI             |
 | --------------- | -------- | ------------------ |
@@ -205,7 +218,7 @@ Expected cost uses the default costs (65 per offer, 780 per missed churner). Of 
 
 The threshold is chosen to minimise expected cost under the defaults in `src/features.py`, which are derived from the dataset's mean monthly charge of about 65: a wasted retention offer is assumed to cost one month of revenue (65) and a missed churner twelve months of revenue (780). With a 12:1 cost ratio the break-even probability is about 7.7%, and the validation split picks 0.08. On the test split that flags 63% of customers and catches 94% of churners. The test split's own cost curve prefers 0.05, so the optimum is flat in that region and the exact value should not be over-interpreted.
 
-This cost model implicitly assumes that contacting a churner always prevents the loss. The profit analysis relaxes that with an explicit success rate (see Findings and Recommendations); with a 30% success rate its validation-chosen threshold is 0.34. Both are reported, and the deployed threshold is left on the cost rule so earlier behaviour is unchanged.
+This cost model implicitly assumes that contacting a churner always prevents the loss. The profit analysis relaxes that with an explicit success rate (see Findings and Recommendations); with a 30% success rate its validation-chosen threshold is 0.34. Because the cost rule's assumption is unrealistic, the app defaults to the profit threshold. The 0.08 cost threshold is still the one saved in the artifact and used for the evaluation metrics in this section, and it remains selectable in the app.
 
 ---
 
@@ -276,11 +289,12 @@ Month-to-month customers churn at roughly **15x** the rate of two-year customers
 ├── scripts/
 │   ├── seed_stability.py                      # reports/seed_stability.csv
 │   ├── segment_analysis.py                    # reports/segment_analysis.md and reports/segments/
-│   ├── simulate_retention_test.py             # reports/SIMULATED_experiment_readout.md
+│   ├── readme_charts.py                       # docs/images/model_charts_*.png
 │   └── drift_check.py                         # reports/drift_report.md
 ├── reports/                                   # generated analysis outputs (committed)
 ├── docs/
-│   └── experiment_plan.md                     # retention offer experiment design
+│   ├── experiment_plan.md                     # retention offer experiment design
+│   └── images/                                # README screenshot and charts
 ├── tests/                                     # pytest suite
 ├── artifacts/                                 # committed; regenerate with python -m src.train
 │   ├── churn_model.joblib                     # {model, threshold, report, feature_columns}
@@ -327,8 +341,8 @@ Regenerate the analysis reports (run after retraining so they use the current mo
 ```bash
 python scripts/seed_stability.py
 python scripts/segment_analysis.py
-python scripts/simulate_retention_test.py --effect 0.05
 python scripts/drift_check.py
+python scripts/readme_charts.py
 ```
 
 The decision costs can be overridden without editing code. Set the variables in the same terminal before training and the threshold is recomputed. The app reads the costs saved with the model, so restart it after retraining.
@@ -354,7 +368,7 @@ export CHURN_FALSE_NEGATIVE_COST=1500
 python -m src.train
 ```
 
-The profit analysis in the report uses three more assumptions, also read at training time: `CHURN_OFFER_COST` (default 65), `CHURN_OFFER_SUCCESS_RATE` (default 0.30, the share of contacted churners who stay, which is an assumption and not measured in this data) and `CHURN_RETENTION_MONTHS` (default 12). They do not change the deployed threshold.
+The profit analysis in the report uses three more assumptions, also read at training time: `CHURN_OFFER_COST` (default 65), `CHURN_OFFER_SUCCESS_RATE` (default 0.30, the share of contacted churners who stay, which is an assumption and not measured in this data) and `CHURN_RETENTION_MONTHS` (default 12). They set the profit threshold the app uses by default, and do not change the cost threshold saved with the model.
 
 Run the tests (installs pytest and MLflow on top of the app dependencies). With MLflow installed, `python -m src.train` also logs each run to a local `mlflow.db` (ignored by git); view it with `mlflow ui --backend-store-uri sqlite:///mlflow.db`.
 

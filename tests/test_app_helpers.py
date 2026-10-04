@@ -2,7 +2,7 @@ import joblib
 import numpy as np
 import pytest
 
-from src.app_helpers import explain_prediction, report_cost
+from src.app_helpers import explain_prediction, profit_threshold, report_cost
 from src.features import FEATURE_COLUMNS, load_dataset, original_feature_name, readable_feature_name
 from src.train import MODEL_PATH
 
@@ -17,6 +17,14 @@ def test_report_cost_falls_back_to_old_rupee_keys():
     report = {"false_positive_cost_rupees": 100.0, "false_negative_cost_rupees": 1500.0}
     assert report_cost(report, "false_positive") == 100.0
     assert report_cost(report, "false_negative") == 1500.0
+
+
+def test_profit_threshold_reads_validation_threshold():
+    assert profit_threshold({"profit_analysis": {"validation_threshold": 0.34}}) == 0.34
+
+
+def test_profit_threshold_is_none_for_older_artifacts():
+    assert profit_threshold({"false_positive_cost": 65.0}) is None
 
 
 @pytest.mark.parametrize(

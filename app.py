@@ -5,10 +5,11 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from src.app_helpers import explain_prediction, log_prediction, report_cost
+from src.app_helpers import explain_prediction, log_prediction, profit_threshold, report_cost
 from src.features import FORM_FIELDS, apply_internet_guard, build_input_frame, load_dataset
 from src.train import MODEL_PATH, load_or_train_bundle
 
+PROFIT_RULE = "Profit threshold"
 COST_RULE = "Cost threshold"
 CAPACITY_RULE = "Capacity (top N%)"
 PREDICTION_LOG_PATH = Path(__file__).resolve().parent / "logs" / "predictions.jsonl"
@@ -43,9 +44,13 @@ threshold = bundle.threshold
 report = bundle.report
 false_positive_cost = report_cost(report, "false_positive")
 false_negative_cost = report_cost(report, "false_negative")
+profit_cutoff = profit_threshold(report)
 
+threshold_summary = f"expected cost {threshold:.2f}"
+if profit_cutoff is not None:
+    threshold_summary = f"profit {profit_cutoff:.2f}, {threshold_summary}"
 st.info(
-    f"Selection metric: ROC-AUC. Validation threshold from expected cost: {threshold:.2f}. "
+    f"Selection metric: ROC-AUC. Validation thresholds: {threshold_summary}. "
     f"Cost assumptions: wasted offer = {false_positive_cost:,.0f}, missed churner = {false_negative_cost:,.0f}."
 )
 
@@ -65,11 +70,19 @@ if capacity_rows:
         st.write("Contacting the top share of customers by predicted probability:")
         st.dataframe(pd.DataFrame(capacity_rows), hide_index=True)
 
-# Older artifacts have no capacity table, so only the cost rule is offered for them.
-rule_options = [COST_RULE, CAPACITY_RULE] if capacity_rows else [COST_RULE]
+# Older artifacts have no profit analysis or capacity table, so those rules are only offered when present.
+rule_options = ([PROFIT_RULE] if profit_cutoff is not None else []) + [COST_RULE] + ([CAPACITY_RULE] if capacity_rows else [])
 decision_rule = st.radio("Decision rule", rule_options, horizontal=True)
 capacity_threshold = None
-if decision_rule == CAPACITY_RULE:
+if decision_rule == PROFIT_RULE:
+    offer_success_rate = report["profit_analysis"]["assumptions"]["offer_success_rate"]
+    st.caption(
+        f"Threshold that maximised validation profit assuming {offer_success_rate:.0%} of contacted churners are saved. "
+        "The success rate is an assumption, not measured data."
+    )
+elif decision_rule == COST_RULE:
+    st.caption("Threshold that minimised validation expected cost, assuming every contacted churner is saved.")
+elif decision_rule == CAPACITY_RULE:
     capacity_lookup = {row["capacity"]: row for row in capacity_rows}
     selected_capacity = st.selectbox(
         "Contact the top share of customers",
@@ -103,7 +116,8 @@ with st.form("churn_prediction_form"):
                 )
 
     if capacity_threshold is None:
-        decision_threshold = st.slider("Decision threshold", min_value=0.0, max_value=1.0, value=float(threshold), step=0.01)
+        default_threshold = profit_cutoff if decision_rule == PROFIT_RULE else threshold
+        decision_threshold = st.slider("Decision threshold", min_value=0.0, max_value=1.0, value=float(default_threshold), step=0.01)
     else:
         decision_threshold = capacity_threshold
     submit_button = st.form_submit_button("Predict churn risk")
