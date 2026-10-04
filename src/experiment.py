@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import math
 
-import numpy as np
 from scipy.stats import chisquare
 from statsmodels.stats.power import NormalIndPower
 from statsmodels.stats.proportion import confint_proportions_2indep, proportion_effectsize, proportions_ztest
@@ -41,16 +40,3 @@ def analyze_ab(conv_c: int, n_c: int, conv_t: int, n_t: int, alpha: float = 0.05
         "p_value": float(p_value),
     }
 
-
-def simulate_experiment(eligible_n: int, base_retention: float, true_effect: float, random_state: int = 42) -> dict[str, int]:
-    """SIMULATED: randomise customers 50/50 and draw retention outcomes with an assumed treatment effect."""
-    rng = np.random.default_rng(random_state)
-    treated = rng.random(eligible_n) < 0.5
-    retention_probability = np.where(treated, base_retention + true_effect, base_retention)
-    retained = rng.random(eligible_n) < retention_probability
-    return {
-        "n_control": int((~treated).sum()),
-        "n_treatment": int(treated.sum()),
-        "retained_control": int((retained & ~treated).sum()),
-        "retained_treatment": int((retained & treated).sum()),
-    }

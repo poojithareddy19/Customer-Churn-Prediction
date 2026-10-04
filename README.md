@@ -12,11 +12,13 @@ Five candidate pipelines were compared under 5-fold stratified cross-validation,
   <img src="docs/images/app_prediction.png" alt="Streamlit app showing a 56.5% churn probability for a month-to-month fiber customer, flagged as high risk at the 0.34 profit threshold, with the top SHAP reasons" width="720">
 </p>
 
+**Contents:** [Findings](#findings-and-recommendations) · [Problem](#problem) · [Dataset](#dataset) · [Pipeline](#pipeline) · [Results](#results) · [Feature importance](#feature-importance) · [Segment analysis](#segment-analysis) · [Monitoring](#monitoring) · [Project structure](#project-structure) · [Installation](#installation) · [Usage](#usage) · [Design decisions](#design-decisions) · [Limitations](#limitations) · [Roadmap](#roadmap)
+
 ---
 
 ## Findings and Recommendations
 
-A two-minute summary for decision makers. Sources are listed with each point; test-split numbers cover 1,409 held-out customers.
+A two-minute summary for decision makers. Sources are listed with each point; test-split numbers cover 1,409 held-out customers. Money values throughout are in the units of the dataset's `MonthlyCharges` column, usually read as US dollars.
 
 **Who churns most** (`reports/segment_analysis.md`, all 7,043 customers)
 
@@ -66,13 +68,9 @@ At the cost threshold the 30% scenario earns 38,107.70 on the test split, less t
 
 **Proposed experiment** ([docs/experiment_plan.md](docs/experiment_plan.md))
 
-A 50/50 randomised test of the offer on model-flagged customers, measuring 90-day retention. Detecting a 5 percentage point lift over the 60.2% baseline retention of flagged customers needs 1,467 customers per arm.
+A 50/50 randomised test of the offer on model-flagged customers, measuring 90-day retention. Detecting a 5 percentage point lift over the 60.2% baseline retention of flagged customers needs 1,467 customers per arm (`reports/experiment_sizing.md`).
 
-**Limitations**
-
-- The data is correlational. Neither the model nor the segment analysis shows that any action would reduce churn.
-- Offer cost, the cost of a missed churner and the offer success rate are assumptions, not measured values.
-- The dataset is a static snapshot with no dates, so the model says who is at risk, not when, and drift over time cannot be measured.
+**Main caveat:** the data is a correlational snapshot, and the offer costs and success rate are assumptions, so nothing here shows that an offer would reduce churn. Full list under [Limitations](#limitations).
 
 ---
 
@@ -82,7 +80,7 @@ Acquiring a telecom subscriber costs substantially more than retaining one. A re
 
 ## Dataset
 
-- Source: IBM Telco Customer Churn (`WA_Fn-UseC_-Telco-Customer-Churn.csv`, included in this repo)
+- Source: IBM Telco Customer Churn, as published on [Kaggle](https://www.kaggle.com/datasets/blastchar/telco-customer-churn) (`WA_Fn-UseC_-Telco-Customer-Churn.csv`, included in this repo)
 - 7,043 customers, 19 features covering demographics, subscribed services, and account information
 - Target: `Churn` (Yes/No), imbalanced at roughly 73/27 (1,869 churners)
 
@@ -283,19 +281,20 @@ Month-to-month customers churn at roughly **15x** the rate of two-year customers
 │   ├── evaluate.py                            # metrics, cost curve, lift, capacity, bootstrap, odds ratios, profit curve
 │   ├── app_helpers.py                         # SHAP explanation, prediction logging, report key fallback
 │   ├── segments.py                            # DuckDB query runner and Wilson interval
-│   ├── experiment.py                          # sample size, SRM check, A/B analysis, experiment simulation
+│   ├── experiment.py                          # sample size, SRM check, A/B analysis
 │   └── monitoring.py                          # population stability index
 ├── sql/                                       # 01 to 06 segment and cohort queries (DuckDB)
 ├── scripts/
 │   ├── seed_stability.py                      # reports/seed_stability.csv
 │   ├── segment_analysis.py                    # reports/segment_analysis.md and reports/segments/
+│   ├── experiment_sizing.py                   # reports/experiment_sizing.md
 │   ├── readme_charts.py                       # docs/images/model_charts_*.png
 │   └── drift_check.py                         # reports/drift_report.md
 ├── reports/                                   # generated analysis outputs (committed)
 ├── docs/
 │   ├── experiment_plan.md                     # retention offer experiment design
 │   └── images/                                # README screenshot and charts
-├── tests/                                     # pytest suite
+├── tests/                                     # pytest suite, 42 tests across 7 modules
 ├── artifacts/                                 # committed; regenerate with python -m src.train
 │   ├── churn_model.joblib                     # {model, threshold, report, feature_columns}
 │   └── training_report.json
@@ -341,6 +340,7 @@ Regenerate the analysis reports (run after retraining so they use the current mo
 ```bash
 python scripts/seed_stability.py
 python scripts/segment_analysis.py
+python scripts/experiment_sizing.py
 python scripts/drift_check.py
 python scripts/readme_charts.py
 ```
@@ -370,7 +370,7 @@ python -m src.train
 
 The profit analysis in the report uses three more assumptions, also read at training time: `CHURN_OFFER_COST` (default 65), `CHURN_OFFER_SUCCESS_RATE` (default 0.30, the share of contacted churners who stay, which is an assumption and not measured in this data) and `CHURN_RETENTION_MONTHS` (default 12). They set the profit threshold the app uses by default, and do not change the cost threshold saved with the model.
 
-Run the tests (installs pytest and MLflow on top of the app dependencies). With MLflow installed, `python -m src.train` also logs each run to a local `mlflow.db` (ignored by git); view it with `mlflow ui --backend-store-uri sqlite:///mlflow.db`.
+Run the 42 tests (installs pytest and MLflow on top of the app dependencies). With MLflow installed, `python -m src.train` also logs each run to a local `mlflow.db` (ignored by git); view it with `mlflow ui --backend-store-uri sqlite:///mlflow.db`.
 
 ```bash
 pip install -r requirements-dev.txt

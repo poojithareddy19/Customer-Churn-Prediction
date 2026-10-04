@@ -4,9 +4,8 @@ This is the plan for a randomised test of whether a retention offer keeps custom
 model ranks customers by risk; it does not show that an offer changes anyone's behaviour. Only a controlled
 experiment can measure that.
 
-Numbers marked "from the data" come from `scripts/simulate_retention_test.py`, which reads the deployed model
-and the test split. A simulated run of the analysis is in `reports/SIMULATED_experiment_readout.md`; it uses
-made-up outcomes and is not evidence about the offer.
+Numbers marked "from the data" come from `scripts/experiment_sizing.py`, which reads the deployed model and
+the test split and writes `reports/experiment_sizing.md`.
 
 ## 1. Hypothesis
 

@@ -1,6 +1,6 @@
 import pytest
 
-from src.experiment import analyze_ab, sample_size_two_proportions, simulate_experiment, srm_check
+from src.experiment import analyze_ab, sample_size_two_proportions, srm_check
 
 
 def test_sample_size_grows_as_mde_shrinks():
@@ -25,11 +25,3 @@ def test_analyze_ab_interval_contains_observed_difference():
     assert result["ci_lower"] < result["absolute_lift"] < result["ci_upper"]
     assert 0 < result["p_value"] < 1
 
-
-def test_simulation_is_reproducible_for_a_seed():
-    first = simulate_experiment(2000, 0.6, 0.05, random_state=7)
-    second = simulate_experiment(2000, 0.6, 0.05, random_state=7)
-    other = simulate_experiment(2000, 0.6, 0.05, random_state=8)
-    assert first == second
-    assert first != other
-    assert first["n_control"] + first["n_treatment"] == 2000
