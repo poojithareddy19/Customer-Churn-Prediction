@@ -1,0 +1,8 @@
+seed,model,threshold,test_roc_auc,test_brier,test_recall
+0,xgb_balanced_tuned,0.060000,0.851522,0.132885,0.970588
+1,xgb_balanced_tuned,0.050000,0.860978,0.128860,0.978610
+2,xgb_balanced_tuned,0.120000,0.848199,0.134907,0.898396
+3,xgb_balanced_tuned,0.040000,0.843405,0.136179,0.986631
+42,xgb_balanced_tuned,0.080000,0.836127,0.140153,0.943850
+mean,xgb_balanced_tuned,0.070000,0.848046,0.134597,0.955615
+std,xgb_balanced_tuned,0.031623,0.009259,0.004163,0.035803
