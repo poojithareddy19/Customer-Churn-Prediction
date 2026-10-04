@@ -1,7 +1,15 @@
 import numpy as np
 import pytest
 
-from src.evaluate import best_cost_threshold, bootstrap_metrics, capacity_table, expected_cost_curve, lift_table
+from src.evaluate import (
+    best_cost_threshold,
+    bootstrap_metrics,
+    capacity_table,
+    expected_cost_curve,
+    lift_table,
+    logistic_odds_ratios,
+    profit_curve,
+)
 
 
 def _toy_scores(n: int = 400, seed: int = 0):
@@ -69,3 +77,55 @@ def test_bootstrap_metrics_skips_single_class_resamples():
     result = bootstrap_metrics(target, probabilities, threshold=0.5, false_positive_cost=1, false_negative_cost=10, n_boot=50)
 
     assert result["n_skipped"] > 0
+
+
+def test_profit_curve_is_zero_when_nobody_is_contacted():
+    target, probabilities = _toy_scores()
+    probabilities = probabilities * 0.99  # keep every score below the last threshold of 1.0
+    charges = np.full(len(target), 70.0)
+
+    curve, best = profit_curve(target, probabilities, charges, offer_cost=65, success_rate=0.3, months=12)
+
+    last = curve.iloc[-1]
+    assert last["threshold"] == 1.0
+    assert last["customers_contacted"] == 0
+    assert last["profit"] == 0.0
+    assert best["profit"] == curve["profit"].max()
+
+
+def test_profit_curve_never_positive_without_successful_offers():
+    target, probabilities = _toy_scores()
+    charges = np.linspace(20, 110, len(target))
+
+    curve, _ = profit_curve(target, probabilities, charges, offer_cost=65, success_rate=0.0, months=12)
+
+    assert (curve["profit"] <= 0).all()
+
+
+def test_profit_curve_uses_each_customers_own_charges():
+    target = np.array([1, 1, 0])
+    probabilities = np.array([0.9, 0.8, 0.1])
+    charges = np.array([100.0, 10.0, 50.0])
+
+    curve, _ = profit_curve(target, probabilities, charges, offer_cost=5, success_rate=0.5, months=2, steps=11)
+
+    row = curve.loc[curve["threshold"].round(1) == 0.5].iloc[0]
+    assert row["expected_saved_revenue"] == 0.5 * 2 * (100.0 + 10.0)
+    assert row["profit"] == 110.0 - 2 * 5
+
+
+def test_logistic_odds_ratios_returns_readable_top_features():
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.pipeline import Pipeline
+
+    from src.features import build_preprocessor, load_dataset, split_features_target
+
+    features, target = split_features_target(load_dataset().sample(600, random_state=42))
+    pipeline = Pipeline([("preprocess", build_preprocessor()), ("model", LogisticRegression(max_iter=2000))])
+
+    table = logistic_odds_ratios(pipeline, features, target, top_n=15)
+
+    assert len(table) == 15
+    assert table["log_odds"].abs().is_monotonic_decreasing
+    assert np.allclose(table["odds_ratio"], np.exp(table["log_odds"]))
+    assert not table["feature"].str.contains("__").any()

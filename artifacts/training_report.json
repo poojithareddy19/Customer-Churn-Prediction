@@ -1,8 +1,8 @@
 {
   "metric": "roc_auc",
   "selection_reason": "ROC-AUC is threshold-independent and is the most reliable selector for the imbalanced churn target.",
-  "false_positive_cost_rupees": 65.0,
-  "false_negative_cost_rupees": 780.0,
+  "false_positive_cost": 65.0,
+  "false_negative_cost": 780.0,
   "baseline_models": [
     {
       "model": "logistic_balanced",
@@ -61,6 +61,15 @@
         "model__max_depth": 4,
         "model__learning_rate": 0.01,
         "model__colsample_bytree": 0.7
+      }
+    },
+    {
+      "model": "logistic_balanced_tuned",
+      "cv_roc_auc": 0.844404713669791,
+      "best_params": {
+        "model__solver": "liblinear",
+        "model__penalty": "l2",
+        "model__C": 2.636650898730358
       }
     },
     {
@@ -339,6 +348,17 @@
       ],
       "mean": 0.8452922440021668,
       "std": 0.01433851432226787
+    },
+    "logistic_balanced_tuned": {
+      "fold_scores": [
+        0.8377472969864275,
+        0.8706076029445595,
+        0.8576460777547735,
+        0.8412914078674948,
+        0.8147311827956988
+      ],
+      "mean": 0.844404713669791,
+      "std": 0.021192318382064094
     }
   },
   "test_lift_table": [
@@ -531,5 +551,157 @@
         "upper": 3.0401264912943593
       }
     }
+  },
+  "model_comparison": [
+    {
+      "model": "xgb_balanced_tuned",
+      "cv_roc_auc_mean": 0.8480762060597966,
+      "cv_roc_auc_std": 0.015946333886461772
+    },
+    {
+      "model": "rf_balanced_tuned",
+      "cv_roc_auc_mean": 0.8453060048828632,
+      "cv_roc_auc_std": 0.01412195353561721
+    },
+    {
+      "model": "xgb_smote_tuned",
+      "cv_roc_auc_mean": 0.8452922440021668,
+      "cv_roc_auc_std": 0.01433851432226787
+    },
+    {
+      "model": "logistic_balanced_tuned",
+      "cv_roc_auc_mean": 0.844404713669791,
+      "cv_roc_auc_std": 0.021192318382064094
+    },
+    {
+      "model": "rf_smote_tuned",
+      "cv_roc_auc_mean": 0.8436731425825746,
+      "cv_roc_auc_std": 0.013862341075293027
+    }
+  ],
+  "logistic_odds_ratios": [
+    {
+      "feature": "tenure",
+      "log_odds": -1.2259041226407903,
+      "odds_ratio": 0.29349222736390446
+    },
+    {
+      "feature": "Contract = Two year",
+      "log_odds": -0.7936250205503914,
+      "odds_ratio": 0.45220257690877996
+    },
+    {
+      "feature": "MonthlyCharges",
+      "log_odds": -0.7869561277040739,
+      "odds_ratio": 0.4552283454882027
+    },
+    {
+      "feature": "InternetService = Fiber optic",
+      "log_odds": 0.703200303210462,
+      "odds_ratio": 2.020207650102825
+    },
+    {
+      "feature": "Contract = Month-to-month",
+      "log_odds": 0.6572126262904691,
+      "odds_ratio": 1.9294068542754284
+    },
+    {
+      "feature": "TotalCharges",
+      "log_odds": 0.6240678114601126,
+      "odds_ratio": 1.8665052114388014
+    },
+    {
+      "feature": "InternetService = DSL",
+      "log_odds": -0.6222808422628756,
+      "odds_ratio": 0.5367188693815265
+    },
+    {
+      "feature": "TechSupport = No internet service",
+      "log_odds": -0.2956234543538255,
+      "odds_ratio": 0.744067550674053
+    },
+    {
+      "feature": "DeviceProtection = No internet service",
+      "log_odds": -0.2956234543538255,
+      "odds_ratio": 0.744067550674053
+    },
+    {
+      "feature": "InternetService = No",
+      "log_odds": -0.2956234543538255,
+      "odds_ratio": 0.744067550674053
+    },
+    {
+      "feature": "OnlineSecurity = No internet service",
+      "log_odds": -0.2956234543538255,
+      "odds_ratio": 0.744067550674053
+    },
+    {
+      "feature": "StreamingTV = No internet service",
+      "log_odds": -0.2956234543538255,
+      "odds_ratio": 0.744067550674053
+    },
+    {
+      "feature": "OnlineBackup = No internet service",
+      "log_odds": -0.2956234543538255,
+      "odds_ratio": 0.744067550674053
+    },
+    {
+      "feature": "StreamingMovies = No internet service",
+      "log_odds": -0.29562345435382537,
+      "odds_ratio": 0.7440675506740531
+    },
+    {
+      "feature": "StreamingMovies = Yes",
+      "log_odds": 0.2886146307465883,
+      "odds_ratio": 1.3345773243499925
+    }
+  ],
+  "profit_analysis": {
+    "assumptions": {
+      "offer_cost": 65.0,
+      "offer_success_rate": 0.3,
+      "retention_months": 12.0,
+      "note": "offer_success_rate is an assumption, not data; profit = success_rate * MonthlyCharges * retention_months summed over contacted churners, minus offer_cost per contacted customer"
+    },
+    "validation_threshold": 0.34,
+    "validation_profit": 45322.44,
+    "test_customers_contacted": 523,
+    "test_churners_contacted": 281,
+    "test_profit": 42869.499999999985,
+    "test_profit_at_deployed_cost_threshold": 38107.7,
+    "success_rate_sensitivity": [
+      {
+        "success_rate": 0.1,
+        "validation_threshold": 0.67,
+        "validation_profit": 1637.9400000000005,
+        "test_customers_contacted": 139,
+        "test_churners_contacted": 100,
+        "test_profit": 508.84000000000196
+      },
+      {
+        "success_rate": 0.2,
+        "validation_threshold": 0.46,
+        "validation_profit": 20766.120000000003,
+        "test_customers_contacted": 379,
+        "test_churners_contacted": 225,
+        "test_profit": 17064.64
+      },
+      {
+        "success_rate": 0.3,
+        "validation_threshold": 0.34,
+        "validation_profit": 45322.44,
+        "test_customers_contacted": 523,
+        "test_churners_contacted": 281,
+        "test_profit": 42869.499999999985
+      },
+      {
+        "success_rate": 0.5,
+        "validation_threshold": 0.18,
+        "validation_profit": 101516.09999999998,
+        "test_customers_contacted": 674,
+        "test_churners_contacted": 320,
+        "test_profit": 102068.30000000002
+      }
+    ]
   }
 }

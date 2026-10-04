@@ -30,14 +30,19 @@ from src.evaluate import (
     expected_cost_curve,
     fold_score_summary,
     lift_table,
+    logistic_odds_ratios,
     permutation_importance_table,
+    profit_curve,
     summarize_predictions,
 )
 from src.features import (
     DATASET_PATH,
-    FALSE_NEGATIVE_COST_RUPEES,
-    FALSE_POSITIVE_COST_RUPEES,
+    FALSE_NEGATIVE_COST,
+    FALSE_POSITIVE_COST,
     FEATURE_COLUMNS,
+    OFFER_COST,
+    OFFER_SUCCESS_RATE,
+    RETENTION_MONTHS,
     build_preprocessor,
     load_dataset,
     split_features_target,
@@ -46,6 +51,7 @@ from src.features import (
 ARTIFACT_DIR = Path(__file__).resolve().parents[1] / "artifacts"
 MODEL_PATH = ARTIFACT_DIR / "churn_model.joblib"
 REPORT_PATH = ARTIFACT_DIR / "training_report.json"
+PROFIT_SENSITIVITY_RATES = (0.1, 0.2, 0.3, 0.5)
 
 
 @dataclass(frozen=True)
@@ -229,6 +235,15 @@ def _rf_smote_search_space() -> dict[str, list[Any]]:
     return space
 
 
+def _logistic_search_space() -> dict[str, list[Any]]:
+    # liblinear supports both l1 and l2 penalties.
+    return {
+        "model__C": [float(value) for value in np.logspace(-3, 2, 20)],
+        "model__penalty": ["l1", "l2"],
+        "model__solver": ["liblinear"],
+    }
+
+
 def _xgb_search_space() -> dict[str, list[Any]]:
     return {
         "model__n_estimators": [150, 250, 350, 500],
@@ -261,6 +276,54 @@ def _search_fold_scores(search: RandomizedSearchCV) -> list[float]:
     return [float(search.cv_results_[f"split{fold}_test_score"][search.best_index_]) for fold in range(search.n_splits_)]
 
 
+def _profit_analysis(evaluation: CalibratedEvaluation, splits: DataSplits) -> dict[str, Any]:
+    """Choose a profit-maximising threshold on validation and report test profit at it."""
+    validation_target = splits.validation_target.to_numpy()
+    validation_charges = splits.validation_features["MonthlyCharges"].to_numpy()
+    test_target = splits.test_target.to_numpy()
+    test_charges = splits.test_features["MonthlyCharges"].to_numpy()
+
+    def at_threshold(success_rate: float, threshold: float) -> dict[str, float]:
+        curve, _ = profit_curve(test_target, evaluation.test_probabilities, test_charges, OFFER_COST, success_rate, RETENTION_MONTHS)
+        row = curve.iloc[(curve["threshold"] - threshold).abs().idxmin()]
+        return {key: float(value) for key, value in row.items()}
+
+    sensitivity = []
+    for success_rate in sorted(set(PROFIT_SENSITIVITY_RATES) | {OFFER_SUCCESS_RATE}):
+        _, validation_best = profit_curve(
+            validation_target, evaluation.validation_probabilities, validation_charges, OFFER_COST, success_rate, RETENTION_MONTHS
+        )
+        test_row = at_threshold(success_rate, validation_best["threshold"])
+        sensitivity.append(
+            {
+                "success_rate": float(success_rate),
+                "validation_threshold": validation_best["threshold"],
+                "validation_profit": validation_best["profit"],
+                "test_customers_contacted": int(test_row["customers_contacted"]),
+                "test_churners_contacted": int(test_row["churners_contacted"]),
+                "test_profit": test_row["profit"],
+            }
+        )
+    base = next(row for row in sensitivity if row["success_rate"] == OFFER_SUCCESS_RATE)
+    deployed = at_threshold(OFFER_SUCCESS_RATE, evaluation.threshold["threshold"])
+    return {
+        "assumptions": {
+            "offer_cost": OFFER_COST,
+            "offer_success_rate": OFFER_SUCCESS_RATE,
+            "retention_months": RETENTION_MONTHS,
+            "note": "offer_success_rate is an assumption, not data; profit = success_rate * MonthlyCharges * retention_months "
+            "summed over contacted churners, minus offer_cost per contacted customer",
+        },
+        "validation_threshold": base["validation_threshold"],
+        "validation_profit": base["validation_profit"],
+        "test_customers_contacted": base["test_customers_contacted"],
+        "test_churners_contacted": base["test_churners_contacted"],
+        "test_profit": base["test_profit"],
+        "test_profit_at_deployed_cost_threshold": deployed["profit"],
+        "success_rate_sensitivity": sensitivity,
+    }
+
+
 def train_model(random_state: int = 42) -> TrainingBundle:
     frame = load_dataset(DATASET_PATH)
     features, target = split_features_target(frame)
@@ -286,6 +349,7 @@ def train_model(random_state: int = 42) -> TrainingBundle:
     rf_smote_search = _search_model(candidates["rf_smote"], _rf_smote_search_space(), train_features, train_target, cv)
     xgb_search = _search_model(candidates["xgb_balanced"], _xgb_search_space(), train_features, train_target, cv)
     xgb_smote_search = _search_model(candidates["xgb_smote"], _xgb_search_space(), train_features, train_target, cv)
+    logistic_search = _search_model(candidates["logistic_balanced"], _logistic_search_space(), train_features, train_target, cv)
 
     tuned_frame = pd.DataFrame(
         [
@@ -293,6 +357,7 @@ def train_model(random_state: int = 42) -> TrainingBundle:
             {"model": "rf_smote_tuned", "cv_roc_auc": float(rf_smote_search.best_score_), "best_params": rf_smote_search.best_params_},
             {"model": "xgb_balanced_tuned", "cv_roc_auc": float(xgb_search.best_score_), "best_params": xgb_search.best_params_},
             {"model": "xgb_smote_tuned", "cv_roc_auc": float(xgb_smote_search.best_score_), "best_params": xgb_smote_search.best_params_},
+            {"model": "logistic_balanced_tuned", "cv_roc_auc": float(logistic_search.best_score_), "best_params": logistic_search.best_params_},
         ]
     ).sort_values("cv_roc_auc", ascending=False).reset_index(drop=True)
 
@@ -301,6 +366,7 @@ def train_model(random_state: int = 42) -> TrainingBundle:
         "rf_smote_tuned": rf_smote_search,
         "xgb_balanced_tuned": xgb_search,
         "xgb_smote_tuned": xgb_smote_search,
+        "logistic_balanced_tuned": logistic_search,
     }
     for search_name, search in searches.items():
         cv_fold_scores[search_name] = fold_score_summary(_search_fold_scores(search))
@@ -323,12 +389,17 @@ def train_model(random_state: int = 42) -> TrainingBundle:
     test_lift = lift_table(test_target.to_numpy(), test_probabilities)
     test_capacity = capacity_table(test_target.to_numpy(), test_probabilities)
     test_bootstrap = bootstrap_metrics(test_target.to_numpy(), test_probabilities, best_threshold["threshold"])
+    model_comparison = [
+        {"model": name, "cv_roc_auc_mean": cv_fold_scores[name]["mean"], "cv_roc_auc_std": cv_fold_scores[name]["std"]}
+        for name in tuned_frame["model"]
+    ]
+    odds_ratios = logistic_odds_ratios(logistic_search.best_estimator_, train_features, train_target)
 
     report = {
         "metric": "roc_auc",
         "selection_reason": "ROC-AUC is threshold-independent and is the most reliable selector for the imbalanced churn target.",
-        "false_positive_cost_rupees": FALSE_POSITIVE_COST_RUPEES,
-        "false_negative_cost_rupees": FALSE_NEGATIVE_COST_RUPEES,
+        "false_positive_cost": FALSE_POSITIVE_COST,
+        "false_negative_cost": FALSE_NEGATIVE_COST,
         "baseline_models": baseline_frame.to_dict(orient="records"),
         "tuned_models": tuned_frame.to_dict(orient="records"),
         "best_model_name": tuned_frame.loc[0, "model"],
@@ -342,6 +413,9 @@ def train_model(random_state: int = 42) -> TrainingBundle:
         "test_lift_table": test_lift.to_dict(orient="records"),
         "test_capacity_table": test_capacity.to_dict(orient="records"),
         "test_bootstrap_ci": test_bootstrap,
+        "model_comparison": model_comparison,
+        "logistic_odds_ratios": odds_ratios.to_dict(orient="records"),
+        "profit_analysis": _profit_analysis(evaluation, splits),
     }
 
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)

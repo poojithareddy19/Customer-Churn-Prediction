@@ -3,7 +3,8 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from src.features import FORM_FIELDS, apply_internet_guard, build_input_frame
+from src.app_helpers import explain_prediction, report_cost
+from src.features import FORM_FIELDS, apply_internet_guard, build_input_frame, load_dataset
 from src.train import MODEL_PATH, load_or_train_bundle
 
 COST_RULE = "Cost threshold"
@@ -20,6 +21,12 @@ def load_bundle():
     return load_or_train_bundle()
 
 
+@st.cache_data
+def load_background(feature_columns: tuple[str, ...]):
+    # Only needed when the selected model is a logistic regression (SHAP linear explainer).
+    return load_dataset()[list(feature_columns)].sample(500, random_state=42)
+
+
 if not MODEL_PATH.exists():
     st.warning(
         "No trained model found in artifacts/. Training will run now and can take several minutes. "
@@ -31,10 +38,12 @@ with st.spinner("Loading model..."):
 model = bundle.model
 threshold = bundle.threshold
 report = bundle.report
+false_positive_cost = report_cost(report, "false_positive")
+false_negative_cost = report_cost(report, "false_negative")
 
 st.info(
     f"Selection metric: ROC-AUC. Validation threshold from expected cost: {threshold:.2f}. "
-    f"Cost assumptions: wasted offer = {report['false_positive_cost_rupees']:,.0f}, missed churner = {report['false_negative_cost_rupees']:,.0f}."
+    f"Cost assumptions: wasted offer = {false_positive_cost:,.0f}, missed churner = {false_negative_cost:,.0f}."
 )
 
 with st.expander("Model summary", expanded=False):
@@ -102,8 +111,8 @@ if submit_button:
     churn_probability = float(model.predict_proba(input_frame)[0, 1])
     churn_prediction = int(churn_probability >= decision_threshold)
     # Cost of each possible decision, so the two numbers can be compared directly.
-    cost_if_not_contacted = report["false_negative_cost_rupees"] * churn_probability
-    cost_if_contacted = report["false_positive_cost_rupees"] * (1 - churn_probability)
+    cost_if_not_contacted = false_negative_cost * churn_probability
+    cost_if_contacted = false_positive_cost * (1 - churn_probability)
 
     st.subheader("Prediction Result")
     if churn_prediction:
@@ -116,6 +125,15 @@ if submit_button:
     cost_columns[1].metric("Expected cost if contacted", f"{cost_if_contacted:,.0f}")
     st.write("Decision rule:", decision_rule)
     st.write("Prediction threshold used:", f"{decision_threshold:.3f}")
+
+    with st.expander("Why this score?", expanded=False):
+        explanation, unit = explain_prediction(model, input_frame, load_background(tuple(bundle.feature_columns)))
+        st.dataframe(explanation, hide_index=True)
+        st.caption(
+            f"SHAP values for the uncalibrated model score, in {unit}. They show the direction and relative size of "
+            "each feature's push on the score, not exact changes in the displayed probability. One-hot columns are "
+            "summed back to the original feature."
+        )
 
     with st.expander("Applied input guard", expanded=False):
         st.write(guarded_values)

@@ -4,12 +4,13 @@ import math
 
 import numpy as np
 import pandas as pd
+from sklearn.base import clone
 from sklearn.calibration import calibration_curve
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import brier_score_loss, classification_report, confusion_matrix, roc_auc_score
 from sklearn.model_selection import cross_val_score
 
-from .features import FALSE_NEGATIVE_COST_RUPEES, FALSE_POSITIVE_COST_RUPEES
+from .features import FALSE_NEGATIVE_COST, FALSE_POSITIVE_COST, readable_feature_name
 
 
 DEFAULT_CAPACITIES = (0.05, 0.10, 0.20, 0.30, 0.40, 0.50)
@@ -52,8 +53,8 @@ def summarize_predictions(target: np.ndarray, probabilities: np.ndarray, thresho
 def expected_cost_curve(
     target: np.ndarray,
     probabilities: np.ndarray,
-    false_positive_cost: float = FALSE_POSITIVE_COST_RUPEES,
-    false_negative_cost: float = FALSE_NEGATIVE_COST_RUPEES,
+    false_positive_cost: float = FALSE_POSITIVE_COST,
+    false_negative_cost: float = FALSE_NEGATIVE_COST,
     steps: int = 101,
 ) -> pd.DataFrame:
     thresholds = np.linspace(0.0, 1.0, steps)
@@ -147,8 +148,8 @@ def capacity_table(
     target: np.ndarray,
     probabilities: np.ndarray,
     capacities: tuple[float, ...] = DEFAULT_CAPACITIES,
-    false_positive_cost: float = FALSE_POSITIVE_COST_RUPEES,
-    false_negative_cost: float = FALSE_NEGATIVE_COST_RUPEES,
+    false_positive_cost: float = FALSE_POSITIVE_COST,
+    false_negative_cost: float = FALSE_NEGATIVE_COST,
 ) -> pd.DataFrame:
     """Outcome of contacting the top share of customers ranked by predicted probability."""
     target = np.asarray(target).astype(int)
@@ -206,8 +207,8 @@ def bootstrap_metrics(
     target: np.ndarray,
     probabilities: np.ndarray,
     threshold: float,
-    false_positive_cost: float = FALSE_POSITIVE_COST_RUPEES,
-    false_negative_cost: float = FALSE_NEGATIVE_COST_RUPEES,
+    false_positive_cost: float = FALSE_POSITIVE_COST,
+    false_negative_cost: float = FALSE_NEGATIVE_COST,
     n_boot: int = 1000,
     random_state: int = 42,
 ) -> dict:
@@ -244,3 +245,61 @@ def bootstrap_metrics(
             for name, values in samples.items()
         },
     }
+
+
+def logistic_odds_ratios(pipeline, features, target, top_n: int = 15) -> pd.DataFrame:
+    """Fit a copy of a preprocess + logistic pipeline and return its largest odds ratios.
+
+    Numeric inputs are standardised, so their odds ratio is per one standard deviation.
+    """
+    fitted = clone(pipeline).fit(features, target)
+    names = fitted.named_steps["preprocess"].get_feature_names_out()
+    coefficients = fitted.named_steps["model"].coef_[0]
+    frame = pd.DataFrame(
+        {
+            "feature": [readable_feature_name(name) for name in names],
+            "log_odds": coefficients,
+            "odds_ratio": np.exp(coefficients),
+        }
+    )
+    order = frame["log_odds"].abs().sort_values(ascending=False).index
+    return frame.loc[order].head(top_n).reset_index(drop=True)
+
+
+def profit_curve(
+    target: np.ndarray,
+    probabilities: np.ndarray,
+    monthly_charges: np.ndarray,
+    offer_cost: float,
+    success_rate: float,
+    months: float,
+    steps: int = 101,
+) -> tuple[pd.DataFrame, dict[str, float]]:
+    """Expected retention profit when everyone at or above each threshold gets an offer.
+
+    profit = sum over contacted churners of (success_rate * monthly_charges * months)
+             - offer_cost * customers contacted
+    Returns the curve and its profit-maximising row.
+    """
+    target = np.asarray(target).astype(int)
+    probabilities = np.asarray(probabilities, dtype=float)
+    monthly_charges = np.asarray(monthly_charges, dtype=float)
+    rows = []
+    for threshold in np.linspace(0.0, 1.0, steps):
+        contacted = probabilities >= threshold
+        contacted_churners = contacted & (target == 1)
+        saved_revenue = float(success_rate * months * monthly_charges[contacted_churners].sum())
+        offer_spend = float(offer_cost * contacted.sum())
+        rows.append(
+            {
+                "threshold": float(threshold),
+                "customers_contacted": int(contacted.sum()),
+                "churners_contacted": int(contacted_churners.sum()),
+                "expected_saved_revenue": saved_revenue,
+                "offer_spend": offer_spend,
+                "profit": saved_revenue - offer_spend,
+            }
+        )
+    frame = pd.DataFrame(rows)
+    best = frame.loc[frame["profit"].idxmax()]
+    return frame, {key: float(value) for key, value in best.items()}

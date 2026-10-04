@@ -39,8 +39,15 @@ FEATURE_COLUMNS = NUMERIC_FEATURES + CATEGORICAL_FEATURES
 # in the dataset (about 65): a retention offer is assumed to cost one month of revenue, and a lost
 # customer is assumed to cost twelve months of revenue. Override with the environment variables
 # CHURN_FALSE_POSITIVE_COST and CHURN_FALSE_NEGATIVE_COST, then retrain to move the threshold.
-FALSE_POSITIVE_COST_RUPEES = float(os.environ.get("CHURN_FALSE_POSITIVE_COST", 65.0))
-FALSE_NEGATIVE_COST_RUPEES = float(os.environ.get("CHURN_FALSE_NEGATIVE_COST", 780.0))
+FALSE_POSITIVE_COST = float(os.environ.get("CHURN_FALSE_POSITIVE_COST", 65.0))
+FALSE_NEGATIVE_COST = float(os.environ.get("CHURN_FALSE_NEGATIVE_COST", 780.0))
+
+# Profit model assumptions, used only for the profit analysis in the report (the deployed threshold
+# still comes from the costs above). The success rate is an assumption, not something measured in this
+# dataset: it is the share of contacted churners who stay because of the offer.
+OFFER_COST = float(os.environ.get("CHURN_OFFER_COST", 65.0))
+OFFER_SUCCESS_RATE = float(os.environ.get("CHURN_OFFER_SUCCESS_RATE", 0.30))
+RETENTION_MONTHS = float(os.environ.get("CHURN_RETENTION_MONTHS", 12))
 
 FIELD_OPTIONS: dict[str, list[Any]] = {
     "gender": ["Female", "Male"],
@@ -160,6 +167,24 @@ def apply_internet_guard(values: dict[str, Any]) -> dict[str, Any]:
         ]:
             guarded[field] = "No internet service"
     return guarded
+
+
+def original_feature_name(transformed_name: str) -> str:
+    """Map a preprocessor output name such as "categorical__Contract_Two year" back to "Contract"."""
+    if transformed_name.startswith("numeric__"):
+        return transformed_name.removeprefix("numeric__")
+    encoded = transformed_name.removeprefix("categorical__")
+    matches = [feature for feature in CATEGORICAL_FEATURES if encoded.startswith(f"{feature}_")]
+    return max(matches, key=len) if matches else encoded
+
+
+def readable_feature_name(transformed_name: str) -> str:
+    """Readable label: "Contract = Two year" for one-hot columns, "tenure" for numeric ones."""
+    feature = original_feature_name(transformed_name)
+    if transformed_name.startswith("categorical__"):
+        category = transformed_name.removeprefix(f"categorical__{feature}_")
+        return f"{feature} = {category}"
+    return feature
 
 
 def build_input_frame(values: dict[str, Any], feature_columns: list[str] | None = None) -> pd.DataFrame:
