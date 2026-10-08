@@ -230,6 +230,8 @@ Expected cost uses the default costs (65 per offer, 780 per missed churner). Of 
 
 The threshold is chosen to minimise expected cost under the defaults in `src/features.py`, which are derived from the dataset's mean monthly charge of about 65: a wasted retention offer is assumed to cost one month of revenue (65) and a missed churner twelve months of revenue (780). With a 12:1 cost ratio the break-even probability is about 7.7%, and the validation split picks 0.08. On the test split that flags 63% of customers and catches 94% of churners. The test split's own cost curve prefers 0.05, so the optimum is flat in that region and the exact value should not be over-interpreted.
 
+For comparison, the default 0.5 threshold on the same test split gives 128 false positives and 165 missed churners, an expected cost of 137,020 (`test_cost_at_default_threshold` in the report). The 0.08 threshold's 51,090 is 2.7 times lower, mostly because it misses 21 churners instead of 165.
+
 This cost model implicitly assumes that contacting a churner always prevents the loss. The profit analysis relaxes that with an explicit success rate (see Findings and Recommendations); with a 30% success rate its validation-chosen threshold is 0.34. Because the cost rule's assumption is unrealistic, the app defaults to the profit threshold. The 0.08 cost threshold is still the one saved in the artifact and used for the evaluation metrics in this section, and it remains selectable in the app.
 
 ---

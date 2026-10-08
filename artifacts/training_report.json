@@ -118,6 +118,12 @@
     "true_negatives": 501,
     "classification_report": "              precision    recall  f1-score   support\n\n           0       0.96      0.48      0.64      1035\n           1       0.40      0.94      0.56       374\n\n    accuracy                           0.61      1409\n   macro avg       0.68      0.71      0.60      1409\nweighted avg       0.81      0.61      0.62      1409\n"
   },
+  "test_cost_at_default_threshold": {
+    "threshold": 0.5,
+    "false_positives": 128,
+    "false_negatives": 165,
+    "expected_cost": 137020.0
+  },
   "calibration_curve": [
     {
       "mean_predicted_probability": 0.04590384744546188,
@@ -704,7 +710,7 @@
       }
     ]
   },
-  "run_timestamp": "2026-10-04T05:26:28+00:00",
-  "git_commit": "40268e96b00768e2a1697972f038476b06fab021",
-  "git_dirty": true
+  "run_timestamp": "2026-10-08T12:34:44+00:00",
+  "git_commit": "f2d33f317f03b030d9f0ee7ce351778d9316c34a",
+  "git_dirty": false
 }
