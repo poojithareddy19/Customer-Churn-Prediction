@@ -15,7 +15,7 @@ Five candidate pipelines were compared under 5-fold stratified cross-validation,
   <img src="docs/images/app_prediction.png" alt="Streamlit app showing a 56.5% churn probability for a month-to-month fiber customer, flagged as high risk at the 0.34 profit threshold, with the top SHAP reasons" width="720">
 </p>
 
-**Contents:** [Findings](#findings-and-recommendations) · [Problem](#problem) · [Dataset](#dataset) · [Pipeline](#pipeline) · [Results](#results) · [Feature importance](#feature-importance) · [Segment analysis](#segment-analysis) · [Monitoring](#monitoring) · [Project structure](#project-structure) · [Installation](#installation) · [Usage](#usage) · [Design decisions](#design-decisions) · [Limitations](#limitations) · [Roadmap](#roadmap)
+**Contents:** [Findings](#findings-and-recommendations) · [Problem](#problem) · [Dataset](#dataset) · [Pipeline](#pipeline) · [First version](#what-was-wrong-with-the-first-version) · [Results](#results) · [Feature importance](#feature-importance) · [Segment analysis](#segment-analysis) · [Monitoring](#monitoring) · [Project structure](#project-structure) · [Installation](#installation) · [Usage](#usage) · [Design decisions](#design-decisions) · [Limitations](#limitations) · [Roadmap](#roadmap)
 
 ---
 
@@ -117,6 +117,17 @@ All training and inference code lives in `src/`. The notebook is kept as the ori
 
 9. **Deployment** (`app.py`)
    Streamlit app that loads the artifact, exposes all 19 inputs, applies consistency guards (no internet service implies no add-ons, no phone service implies no multiple lines), and shows the probability, verdict, and expected cost of each decision. Three decision rules are offered: the profit threshold (the default, 0.34) and the cost threshold (0.08), both adjustable with a slider, and a capacity rule (top N% by score). A "Why this score?" panel shows the top five SHAP contributions, and every prediction is appended to `logs/predictions.jsonl`.
+
+## What was wrong with the first version
+
+The first model lives in `Customer_Churn_Prediction_Using_ML.ipynb` (commits from 31 Jan to 3 Feb 2026). Its numbers were optimistic for four reasons. Cell numbers below are the execution counts shown in the notebook.
+
+1. **Cross-validation on oversampled data.** The data was split at `In [45]`, then SMOTE was applied to the whole training set at `In [49]`, growing it from 5,634 to 8,276 rows. `In [53]` then ran `cross_val_score(model, x_train_smote, y_train_smote, cv=5, scoring="accuracy")` on the already-oversampled rows. Synthetic churners are interpolated between real churners, so near-copies of the validation points sat in the training folds.
+2. **The CV score did not hold up.** Random Forest scored 0.84 CV accuracy but 0.78 on the held-out test set (`In [58]`).
+3. **The fold scores show the problem.** The Random Forest folds were 0.73, 0.78, 0.91, 0.89 and 0.90 (`In [54]`). SMOTE appends its synthetic rows to the end of the data and `cross_val_score` does not shuffle, so the churners in the last three folds are almost all synthetic, and those folds are much easier to predict.
+4. **Smaller issues.** `LabelEncoder` was fitted on the full dataset before the split (`In [39]`), and models were compared by accuracy on a 73/27 target, where predicting "nobody churns" already scores 73.5%.
+
+**The fix** came in commit `0605f9a` ("Refactor training pipeline into src package", 26 Sep 2026). SMOTE now sits inside an `imblearn` pipeline, so it only ever runs on the training part of each fold, and models are selected by ROC-AUC instead of accuracy. The notebook is kept unchanged as a record of the original work.
 
 ---
 
