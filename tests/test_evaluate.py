@@ -5,6 +5,7 @@ from src.evaluate import (
     best_cost_threshold,
     bootstrap_metrics,
     capacity_table,
+    cost_at_threshold,
     expected_cost_curve,
     lift_table,
     logistic_odds_ratios,
@@ -28,6 +29,16 @@ def test_expected_cost_curve_picks_minimum_cost_threshold():
 
     assert best["threshold"] == 0.5
     assert best["expected_cost"] == 0.0
+
+
+def test_cost_at_threshold_counts_errors_on_a_hand_made_example():
+    target = np.array([0, 0, 0, 1, 1])
+    probabilities = np.array([0.2, 0.6, 0.7, 0.4, 0.9])
+
+    result = cost_at_threshold(target, probabilities, 0.5, false_positive_cost=10, false_negative_cost=100)
+
+    # 0.6 and 0.7 are non-churners above 0.5, 0.4 is a churner below it.
+    assert result == {"threshold": 0.5, "false_positives": 2, "false_negatives": 1, "expected_cost": 120.0}
 
 
 def test_lift_table_perfect_ranking_puts_highest_lift_in_first_decile():

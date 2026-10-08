@@ -34,6 +34,7 @@ def test_train_model_runs_end_to_end_on_a_small_sample(tmp_path, monkeypatch):
         "model_comparison",
         "logistic_odds_ratios",
         "profit_analysis",
+        "test_cost_at_default_threshold",
         "run_timestamp",
         "git_commit",
         "false_positive_cost",

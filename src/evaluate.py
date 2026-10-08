@@ -85,6 +85,26 @@ def best_cost_threshold(cost_frame: pd.DataFrame) -> dict[str, float]:
     }
 
 
+def cost_at_threshold(
+    target: np.ndarray,
+    probabilities: np.ndarray,
+    threshold: float,
+    false_positive_cost: float = FALSE_POSITIVE_COST,
+    false_negative_cost: float = FALSE_NEGATIVE_COST,
+) -> dict[str, float]:
+    """Expected cost of flagging every customer at or above one fixed threshold."""
+    target = np.asarray(target)
+    predictions = (np.asarray(probabilities) >= threshold).astype(int)
+    fp = int(((predictions == 1) & (target == 0)).sum())
+    fn = int(((predictions == 0) & (target == 1)).sum())
+    return {
+        "threshold": float(threshold),
+        "false_positives": fp,
+        "false_negatives": fn,
+        "expected_cost": float(fp * false_positive_cost + fn * false_negative_cost),
+    }
+
+
 def calibration_table(target: np.ndarray, probabilities: np.ndarray, bins: int = 10) -> pd.DataFrame:
     fraction_of_positives, mean_predicted_value = calibration_curve(target, probabilities, n_bins=bins, strategy="uniform")
     return pd.DataFrame(
