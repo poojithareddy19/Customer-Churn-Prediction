@@ -176,6 +176,28 @@ actual  no   501    534
 
 **Why not accuracy.** The majority class is 73.5% of the data, so a model that predicts "nobody churns" scores 73.5% accuracy while identifying zero churners. ROC-AUC measures ranking quality independent of the threshold, and the Brier score measures whether the probabilities themselves are trustworthy, which matters because the app shows them to a human.
 
+### Precision-recall and missed churners
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/pr_curve_dark.png">
+  <img src="docs/images/pr_curve_light.png" alt="Precision-recall curve on the test split, average precision 0.638, against a 26.5% churn-rate baseline. The 0.34 profit threshold sits at 75% recall and 54% precision, the 0.08 cost-only threshold at 94% recall and 40% precision." width="560">
+</picture>
+
+With 26.5% churners, the precision-recall curve is a harder test than ROC: a random model sits on the 26.5% baseline. Average precision is 0.638.
+
+`scripts/error_analysis.py` profiles the 93 churners the model misses at the 0.34 threshold against the 281 it catches (`reports/missed_churners.md`):
+
+| | Caught (281) | Missed (93) |
+| --- | --- | --- |
+| Median tenure | 5 months | 39 months |
+| On a one or two year contract | 0.4% | 52.7% |
+| Fiber optic internet | 78.6% | 48.4% |
+| Pays by electronic check | 63.7% | 35.5% |
+| Has tech support | 9.6% | 44.1% |
+| Median monthly charge | 79.5 | 79.2 |
+
+The missed churners are mostly established customers: three years in, often on annual contracts, paying automatically and with support add-ons, which is exactly the profile the model has learned to treat as safe. Their monthly charges match the caught group, so price alone does not separate them. Their leaving is probably driven by events the snapshot does not record, such as a contract coming up for renewal, a run of support tickets, a drop in usage or a competitor offer, so contract end dates and support and usage history are the data most likely to catch them.
+
 ### Uncertainty and stability
 
 Bootstrap 95% percentile intervals on the test split (1,000 resamples, seed 42, no resample skipped), at the cost threshold of 0.08:
@@ -315,6 +337,7 @@ The app appends every prediction to `logs/predictions.jsonl`. Streamlit Cloud st
 │   ├── experiment_sizing.py                   # reports/experiment_sizing.md
 │   ├── readme_charts.py                       # docs/images/model_charts_*.png
 │   ├── logit_inference.py                     # reports/logit_inference.md, statsmodels odds ratios and VIF
+│   ├── error_analysis.py                      # reports/missed_churners.md and docs/images/pr_curve_*.png
 │   └── drift_check.py                         # reports/drift_report.md
 ├── reports/                                   # generated analysis outputs (committed)
 ├── docs/
@@ -369,6 +392,7 @@ python scripts/segment_analysis.py
 python scripts/experiment_sizing.py
 python scripts/drift_check.py
 python scripts/logit_inference.py
+python scripts/error_analysis.py
 python scripts/readme_charts.py
 ```
 
