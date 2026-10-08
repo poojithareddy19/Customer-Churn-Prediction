@@ -445,6 +445,8 @@ python -m pytest -q
 | Permutation importance                    | Measured on held-out data and not biased toward continuous columns, unlike Gini importance                           |
 | `TotalCharges` blanks filled with 0.0     | All 11 rows have zero tenure, so the customer had not yet been billed                                                |
 | Feature order persisted with the model    | The app builds its input frame from the saved column list, so form and model cannot drift apart                      |
+| SHAP on the uncalibrated XGBoost model    | Sigmoid calibration is monotonic, so it does not change how customers are ranked. The SHAP values explain the base model's log-odds output, not the calibrated probability shown in the app |
+| XGBoost over logistic regression          | Tuned logistic regression is within 0.004 CV ROC-AUC (0.844 vs 0.848) and the fold standard deviation is about 0.016, so the two are statistically tied. XGBoost was kept for its slightly higher score; logistic regression would be a defensible, more interpretable choice |
 
 ## Limitations
 
