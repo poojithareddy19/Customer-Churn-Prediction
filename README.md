@@ -196,7 +196,7 @@ With 26.5% churners, the precision-recall curve is a harder test than ROC: a ran
 | Has tech support | 9.6% | 44.1% |
 | Median monthly charge | 79.5 | 79.2 |
 
-The missed churners are mostly established customers: three years in, often on annual contracts, paying automatically and with support add-ons, which is exactly the profile the model has learned to treat as safe. Their monthly charges match the caught group, so price alone does not separate them. Their leaving is probably driven by events the snapshot does not record, such as a contract coming up for renewal, a run of support tickets, a drop in usage or a competitor offer, so contract end dates and support and usage history are the data most likely to catch them.
+Most of the churners I miss are long-time customers. They have been with the company for about three years, half of them are on one or two year contracts, and many pay automatically and have tech support. The model has learned that this kind of customer usually stays, so it gives them a low score. Their monthly charges are the same as the churners I catch, so price is not the difference. I think these customers leave because of something the dataset does not have, like a contract ending, repeated support calls or a better offer from a competitor. Contract end dates and support and usage history would help catch them.
 
 ### Uncertainty and stability
 
@@ -290,7 +290,7 @@ A plain one-hot encoding is not interpretable here, for two reasons. First, "No 
 | OnlineSecurity = Yes                 | 0.70       | 0.59 to 0.82   |
 | TechSupport = Yes                    | 0.72       | 0.61 to 0.85   |
 
-All of these have p < 0.0001 except TechSupport (p = 0.0001). Holding the other columns fixed, each extra standard deviation of tenure (about two years) cuts the odds of churn by more than half (odds ratio 0.43, 95% CI 0.39 to 0.48). A two-year contract has about a quarter of the churn odds of a month-to-month contract, and a one-year contract about half. Fiber optic customers have about 2.5 times the churn odds of DSL customers with the same services, which matches the segment analysis and points at price or service quality on the fiber product rather than at any single add-on. These are associations in a snapshot, not causal effects.
+All of these are significant (p < 0.0001, TechSupport p = 0.0001). Tenure has the biggest effect: every extra two years or so (one standard deviation) cuts the odds of churning by more than half (odds ratio 0.43, 95% CI 0.39 to 0.48). Contracts matter almost as much. Compared with month-to-month, a two-year contract has about a quarter of the churn odds and a one-year contract about half. Fiber optic customers have about 2.5 times the churn odds of DSL customers with the same add-ons, which matches what I saw in the segment analysis. I read this as a problem with the fiber product itself, maybe price or service quality. These are correlations from one snapshot, so they do not prove what causes churn.
 
 **Per-customer explanations.** The app's "Why this score?" panel runs `shap.TreeExplainer` on the uncalibrated XGBoost model inside the first calibration fold and sums one-hot contributions back to each original feature. The values are in log-odds and show direction and relative size, not exact changes in the displayed probability.
 
@@ -311,7 +311,7 @@ Month-to-month customers churn at roughly **15x** the rate of two-year customers
 PSI drift check (demonstrated on a simulated shift and on real train vs test data). `scripts/drift_check.py` computes the population stability index (PSI, `src/monitoring.py`) for `tenure`, `MonthlyCharges`, `TotalCharges` and the predicted probability, and writes `reports/drift_report.md`. The dataset has no time dimension, so real drift over time cannot be measured. Three comparisons are reported:
 
 - **Training vs test split (real):** stable on every column (PSI 0.007 to 0.011), which is the expected result for a random split.
-- **Existing vs new customers (real):** customers with 12 or more months of tenure against those with fewer. New customers pay less per month (PSI 0.54 on MonthlyCharges) and score much higher (PSI 2.64 on the predicted probability), so a shift in acquisition would be visible in the scores straight away.
+- **Existing vs new customers (real):** I compared customers with 12 or more months of tenure against newer ones. New customers pay less per month (PSI 0.54 on MonthlyCharges) and get much higher churn scores (PSI 2.64 on the predicted probability). So if the company starts signing up more new customers, the check would pick it up in the scores right away.
 - **SIMULATED shift:** a sample of month-to-month customers only gives PSI 0.58 on tenure and 3.69 on the predicted probability, which would trigger an alert.
 
 The app appends every prediction to `logs/predictions.jsonl`. Streamlit Cloud storage is not persistent, so on the hosted demo that file is lost on restart; production logging would write to a database or object store, and the PSI check would run on those logs.
