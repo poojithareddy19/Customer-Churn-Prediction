@@ -253,19 +253,22 @@ Permutation importance (drop in test ROC-AUC when the column is shuffled, mean o
 
 Permutation importance is preferred over Gini importance because it is measured on held-out data and is not biased toward high-cardinality or continuous columns. Under this measure contract type is by far the strongest signal.
 
-**Logistic regression odds ratios.** The tuned logistic regression, fitted on the training split, gives an interpretable cross-check (`logistic_odds_ratios` in the report, top 15 stored). Numeric features are standardised, so their odds ratio is per one standard deviation.
+**Logistic regression inference.** `scripts/logit_inference.py` fits a statsmodels `Logit` on all 7,043 customers to get odds ratios with 95% confidence intervals and p-values (`reports/logit_inference.md`, full table in `reports/logit_odds_ratios.csv`). It is an explanatory model, separate from the deployed XGBoost.
 
-| Feature                       | Odds ratio |
-| ----------------------------- | ---------- |
-| tenure (per SD)               | 0.29       |
-| Contract = Two year           | 0.45       |
-| MonthlyCharges (per SD)       | 0.46       |
-| InternetService = Fiber optic | 2.02       |
-| Contract = Month-to-month     | 1.93       |
-| TotalCharges (per SD)         | 1.87       |
-| InternetService = DSL         | 0.54       |
+A plain one-hot encoding is not interpretable here, for two reasons. First, "No internet service" appears in six add-on columns and is identical to InternetService = No, so those dummies are perfectly collinear; the sklearn odds ratios stored in the training report give all of them the same value (0.74). The script merges "No internet service" and "No phone service" into "No". Second, the variance inflation factor (VIF) of MonthlyCharges is about 865, because the monthly charge is almost exactly the sum of the add-on prices, and TotalCharges (VIF 10.8) is close to tenure times MonthlyCharges. In that model TotalCharges gets an odds ratio of 2.1 per SD while tenure gets 0.23, opposite directions for two closely related variables. After dropping MonthlyCharges and TotalCharges every VIF is below 2.8.
 
-tenure, MonthlyCharges and TotalCharges are strongly correlated (TotalCharges is roughly tenure times MonthlyCharges), so their individual coefficients should not be read in isolation. The seven "No internet service" columns encode the same customers and receive identical coefficients (odds ratio 0.74), which is why they fill several of the remaining top-15 rows.
+| Feature (reference level)            | Odds ratio | 95% CI         |
+| ------------------------------------ | ---------- | -------------- |
+| tenure (per SD, about 25 months)     | 0.43       | 0.39 to 0.48   |
+| Contract = Two year (month-to-month) | 0.26       | 0.18 to 0.36   |
+| Contract = One year (month-to-month) | 0.51       | 0.42 to 0.63   |
+| InternetService = Fiber optic (DSL)  | 2.47       | 2.06 to 2.95   |
+| InternetService = No (DSL)           | 0.45       | 0.34 to 0.59   |
+| PaperlessBilling = Yes               | 1.40       | 1.21 to 1.62   |
+| OnlineSecurity = Yes                 | 0.70       | 0.59 to 0.82   |
+| TechSupport = Yes                    | 0.72       | 0.61 to 0.85   |
+
+All of these have p < 0.0001 except TechSupport (p = 0.0001). Holding the other columns fixed, each extra standard deviation of tenure (about two years) cuts the odds of churn by more than half (odds ratio 0.43, 95% CI 0.39 to 0.48). A two-year contract has about a quarter of the churn odds of a month-to-month contract, and a one-year contract about half. Fiber optic customers have about 2.5 times the churn odds of DSL customers with the same services, which matches the segment analysis and points at price or service quality on the fiber product rather than at any single add-on. These are associations in a snapshot, not causal effects.
 
 **Per-customer explanations.** The app's "Why this score?" panel runs `shap.TreeExplainer` on the uncalibrated XGBoost model inside the first calibration fold and sums one-hot contributions back to each original feature. The values are in log-odds and show direction and relative size, not exact changes in the displayed probability.
 
@@ -305,6 +308,7 @@ Month-to-month customers churn at roughly **15x** the rate of two-year customers
 │   ├── segment_analysis.py                    # reports/segment_analysis.md and reports/segments/
 │   ├── experiment_sizing.py                   # reports/experiment_sizing.md
 │   ├── readme_charts.py                       # docs/images/model_charts_*.png
+│   ├── logit_inference.py                     # reports/logit_inference.md, statsmodels odds ratios and VIF
 │   └── drift_check.py                         # reports/drift_report.md
 ├── reports/                                   # generated analysis outputs (committed)
 ├── docs/
@@ -358,6 +362,7 @@ python scripts/seed_stability.py
 python scripts/segment_analysis.py
 python scripts/experiment_sizing.py
 python scripts/drift_check.py
+python scripts/logit_inference.py
 python scripts/readme_charts.py
 ```
 
