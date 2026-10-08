@@ -286,7 +286,13 @@ Month-to-month customers churn at roughly **15x** the rate of two-year customers
 
 ## Monitoring
 
-`scripts/drift_check.py` computes the population stability index (PSI, `src/monitoring.py`) for `tenure`, `MonthlyCharges`, `TotalCharges` and the predicted probability. The dataset has no time dimension, so real drift over time cannot be measured; the report (`reports/drift_report.md`) demonstrates the method. Training vs test split is stable on every column (PSI 0.007 to 0.011). A SIMULATED shift made of month-to-month customers only gives PSI 0.58 on tenure and 3.69 on the predicted probability, which would trigger an alert.
+PSI drift check (demonstrated on a simulated shift and on real train vs test data). `scripts/drift_check.py` computes the population stability index (PSI, `src/monitoring.py`) for `tenure`, `MonthlyCharges`, `TotalCharges` and the predicted probability, and writes `reports/drift_report.md`. The dataset has no time dimension, so real drift over time cannot be measured. Three comparisons are reported:
+
+- **Training vs test split (real):** stable on every column (PSI 0.007 to 0.011), which is the expected result for a random split.
+- **Existing vs new customers (real):** customers with 12 or more months of tenure against those with fewer. New customers pay less per month (PSI 0.54 on MonthlyCharges) and score much higher (PSI 2.64 on the predicted probability), so a shift in acquisition would be visible in the scores straight away.
+- **SIMULATED shift:** a sample of month-to-month customers only gives PSI 0.58 on tenure and 3.69 on the predicted probability, which would trigger an alert.
+
+The app appends every prediction to `logs/predictions.jsonl`. Streamlit Cloud storage is not persistent, so on the hosted demo that file is lost on restart; production logging would write to a database or object store, and the PSI check would run on those logs.
 
 ---
 
@@ -420,7 +426,7 @@ python -m pytest -q
 
 - **Cost and profit assumptions are estimates.** The default costs are derived from the dataset's mean monthly charge, not from a real offer cost or customer lifetime value, and the offer success rate is a pure assumption. Replace them through the environment variables, and measure the success rate with the experiment in `docs/experiment_plan.md`, before using either threshold operationally.
 - **Small randomised search.** 10 iterations per model family. A larger search might change the winner, since the tuned models are within 0.005 ROC-AUC of each other and the fold standard deviations are larger than that.
-- **Static snapshot.** No time dimension, so the model cannot express when a customer is likely to churn, only whether, and drift can only be demonstrated with simulated shifts.
+- **Static snapshot.** No time dimension, so the model cannot express when a customer is likely to churn, only whether, and drift over time can only be demonstrated with a simulated shift and with real splits inside the snapshot.
 - **Correlation, not causation.** A customer flagged as high-risk on a month-to-month contract does not mean moving them to an annual contract will retain them. A high churn score also does not mean the customer will respond to an offer; the experiment plan describes uplift modelling for that.
 
 ## Roadmap
