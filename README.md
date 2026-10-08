@@ -9,7 +9,7 @@ Predicts whether a telecom customer is likely to churn, using a calibrated gradi
 
 **Live demo:** [customer-churn-risk-app.streamlit.app](https://customer-churn-risk-app.streamlit.app)
 
-Five candidate pipelines were compared under 5-fold stratified cross-validation, logistic regression, Random Forest and XGBoost variants were tuned with randomised search, and the winner was calibrated and evaluated on a held-out test set.
+Five candidate pipelines across three model families (logistic regression, Random Forest and XGBoost, each class-weighted or with SMOTE) were compared under 5-fold stratified cross-validation and tuned with randomised search. The winner, class-weighted XGBoost with no SMOTE, was calibrated and evaluated on a held-out test set.
 
 **Headline result:** at the profit-maximising threshold of 0.34, the model contacts 37% of the 1,409 test customers and reaches 75.1% of churners (281 of 374) at 53.7% precision, for an expected profit of 42,870 under the stated assumptions. Test ROC-AUC is 0.836 (95% CI 0.815 to 0.859), against a majority-class baseline that catches zero churners.
 
@@ -101,7 +101,7 @@ All training and inference code lives in `src/`. The notebook is kept as the ori
    Stratified 60/20/20 train, validation, test split with `random_state=42`. The validation split is used only to choose the decision threshold. The test split is touched once, at the end.
 
 4. **Candidate comparison**
-   Five pipelines are scored by ROC-AUC under 5-fold stratified cross-validation on the training split: balanced logistic regression, Random Forest (class-weighted and SMOTE), and XGBoost (class-weighted and SMOTE). SMOTE is applied through an `imblearn` pipeline, so resampling happens inside each fold on training data only. Per-fold scores are stored, not only the mean.
+   Five pipelines across three model families are scored by ROC-AUC under 5-fold stratified cross-validation on the training split: balanced logistic regression, Random Forest (class-weighted and SMOTE), and XGBoost (class-weighted and SMOTE). SMOTE is applied through an `imblearn` pipeline, so resampling happens inside each fold on training data only. Per-fold scores are stored, not only the mean.
 
 5. **Tuning**
    The Random Forest and XGBoost variants and a class-weighted logistic regression (`C` on a log scale from 0.001 to 100, `l1` or `l2` penalty, `liblinear` solver) are tuned with `RandomizedSearchCV` (10 iterations, ROC-AUC scoring). The tuned pipeline with the highest mean CV ROC-AUC is selected, with no preference for any model family.
@@ -152,7 +152,7 @@ Mean and standard deviation across the five folds.
 | XGBoost + SMOTE                 | 0.8157 ± 0.0132 | 0.8453 ± 0.0143     |
 | XGBoost (class-weighted)        | 0.8132 ± 0.0102 | **0.8481 ± 0.0159** |
 
-Class-weighted XGBoost was selected after tuning (350 shallow trees, depth 4, learning rate 0.01, subsample 0.85, column subsample 0.7, L2 regularisation 5). Tuning barely moves logistic regression (best: `l2`, `C` = 2.64), and it stays within 0.004 ROC-AUC of the tuned tree models, which is typical for this dataset. Its fold-to-fold standard deviation (0.021) is larger than that gap, so the ranking among the top candidates is not decisive.
+Class-weighted XGBoost was selected after tuning, so the deployed model does not use SMOTE (the SMOTE variants were only candidates) (350 shallow trees, depth 4, learning rate 0.01, subsample 0.85, column subsample 0.7, L2 regularisation 5). Tuning barely moves logistic regression (best: `l2`, `C` = 2.64), and it stays within 0.004 ROC-AUC of the tuned tree models, which is typical for this dataset. Its fold-to-fold standard deviation (0.021) is larger than that gap, so the ranking among the top candidates is not decisive.
 
 ### Held-out splits
 
