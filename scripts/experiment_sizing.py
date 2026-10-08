@@ -1,6 +1,6 @@
 """Sample-size inputs for the retention experiment in docs/experiment_plan.md.
 
-Takes the customers the deployed model flags on the test split, uses their observed retention rate as the
+Takes the customers the deployed model flags at the profit threshold (the app default) on the test split, uses their observed retention rate as the
 control baseline and computes the customers needed per arm for a range of minimum detectable effects.
 
 Usage: python scripts/experiment_sizing.py [--effect 0.05]
@@ -14,6 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from src.app_helpers import profit_threshold  # noqa: E402
 from src.experiment import sample_size_two_proportions  # noqa: E402
 from src.features import load_dataset, split_features_target  # noqa: E402
 from src.train import load_or_train_bundle, split_data  # noqa: E402
@@ -37,7 +38,8 @@ def main() -> None:
     features, target = split_features_target(load_dataset())
     splits = split_data(features, target, 42)
     probabilities = bundle.model.predict_proba(splits.test_features[bundle.feature_columns])[:, 1]
-    eligible = probabilities >= bundle.threshold
+    threshold = profit_threshold(bundle.report)
+    eligible = probabilities >= threshold
     eligible_n = int(eligible.sum())
     base_retention = float(1 - splits.test_target.to_numpy()[eligible].mean())
     eligible_share = eligible_n / len(probabilities)
@@ -58,7 +60,7 @@ def main() -> None:
         "",
         "| Input | Value | Source |",
         "| --- | --- | --- |",
-        f"| Eligible customers | {eligible_n:,} | test split customers at or above the cost threshold {bundle.threshold:.2f} |",
+        f"| Eligible customers | {eligible_n:,} | test split customers at or above the profit threshold {threshold:.2f}, the app default |",
         f"| Eligible share | {eligible_share:.1%} | same, as a share of the {len(probabilities):,} test customers |",
         f"| Control retention rate | {base_retention:.1%} | observed share of eligible test customers with Churn = No |",
         f"| Significance level, power | {args.alpha}, {args.power} | two-sided test, 50/50 split |",

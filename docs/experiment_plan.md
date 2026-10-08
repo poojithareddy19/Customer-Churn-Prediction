@@ -23,8 +23,9 @@ or sharing an account are assigned together if the business can identify them, t
 
 ## 3. Eligibility
 
-- Active customers whose model probability is at or above the deployed threshold (0.08 in the current artifact).
-- On the test split that is 887 of 1,409 customers (63.0%), whose observed retention rate is 60.2% (from the data).
+- Active customers whose model probability is at or above the profit threshold the app uses by default (0.34 in
+  the current artifact).
+- On the test split that is 523 of 1,409 customers (37.1%), whose observed retention rate is 46.3% (from the data).
 - Exclusions, decided before launch: customers already on a retention offer, customers in an open complaint or
   collections process, and staff or test accounts.
 - Eligibility is fixed at assignment time. Customers are not re-scored or re-assigned during the test.
@@ -60,26 +61,26 @@ saw or accepted the offer.
 
 ## 6. Minimum detectable effect, sample size and duration
 
-Two-sided test, alpha = 0.05, power = 0.8, 50/50 split, control retention 60.2% (from the data):
+Two-sided test, alpha = 0.05, power = 0.8, 50/50 split, control retention 46.3% (from the data):
 
 | Minimum detectable effect | Customers per arm | Total |
 | --- | --- | --- |
-| +2 percentage points | 9,318 | 18,636 |
-| +3 percentage points | 4,121 | 8,242 |
-| +5 percentage points | 1,467 | 2,934 |
-| +10 percentage points | 355 | 710 |
+| +2 percentage points | 9,781 | 19,562 |
+| +3 percentage points | 4,351 | 8,702 |
+| +5 percentage points | 1,568 | 3,136 |
+| +10 percentage points | 391 | 782 |
 
-**Planned MDE: +5 percentage points, so 1,467 customers per arm (2,934 in total).** An MDE of +2 or +3 points
-would need 18,636 or 8,242 customers, more than the roughly 4,434 eligible customers estimated below. The
+**Planned MDE: +5 percentage points, so 1,568 customers per arm (3,136 in total).** An MDE of +2 or +3 points
+would need 19,562 or 8,702 customers, far more than the roughly 2,614 eligible customers estimated below. The
 business should confirm that a +5 point lift would justify the offer cost; if only a larger lift would, the MDE
 can be raised and the sample reduced.
 
 **Duration.** The snapshot has no timestamps, so the monthly inflow of newly flagged customers is unknown. Applying
-the eligible share of 63.0% to all 7,043 customers gives about 4,434 eligible customers today, enough to enrol
-2,934 from the current base at once. The test then runs for the 90-day observation window plus about two weeks for
-data to settle, roughly 15 weeks in total. If enrolment has to come from newly flagged customers instead, the
-enrolment period is 2,934 divided by the weekly number of new eligible customers, and the 90-day window starts
-from each customer's assignment date.
+the eligible share of 37.1% to all 7,043 customers gives about 2,614 eligible customers today, about 520 short of
+the 3,136 needed. Two options, to be decided before launch: enrol the current base at once and top up with newly
+flagged customers until 3,136 are assigned, or accept a slightly larger MDE (the current base alone supports about
++5.5 points, 1,296 per arm). Either way, the 90-day window starts from each customer's assignment date, and the
+analysis waits about two weeks after the last window closes for data to settle.
 
 ## 7. Analysis plan
 

@@ -71,7 +71,7 @@ At the cost threshold the 30% scenario earns 38,107.70 on the test split, less t
 
 **Proposed experiment** ([docs/experiment_plan.md](docs/experiment_plan.md))
 
-A 50/50 randomised test of the offer on model-flagged customers, measuring 90-day retention. Detecting a 5 percentage point lift over the 60.2% baseline retention of flagged customers needs 1,467 customers per arm (`reports/experiment_sizing.md`).
+A 50/50 randomised test of the offer on customers flagged at the 0.34 profit threshold, measuring 90-day retention. Detecting a 5 percentage point lift over the 46.3% baseline retention of flagged customers needs 1,568 customers per arm (`reports/experiment_sizing.md`). This is a designed experiment only; it has not been run.
 
 **Main caveat:** the data is a correlational snapshot, and the offer costs and success rate are assumptions, so nothing here shows that an offer would reduce churn. Full list under [Limitations](#limitations).
 
