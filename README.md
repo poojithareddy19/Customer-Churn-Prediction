@@ -9,7 +9,9 @@ Predicts whether a telecom customer is likely to churn, using a calibrated gradi
 
 **Live demo:** [customer-churn-risk-app.streamlit.app](https://customer-churn-risk-app.streamlit.app)
 
-Five candidate pipelines were compared under 5-fold stratified cross-validation, logistic regression, Random Forest and XGBoost variants were tuned with randomised search, and the winner was calibrated and evaluated on a held-out test set. **Test ROC-AUC 0.836 (95% CI 0.815 to 0.859)**, against a majority-class baseline that catches zero churners.
+Five candidate pipelines were compared under 5-fold stratified cross-validation, logistic regression, Random Forest and XGBoost variants were tuned with randomised search, and the winner was calibrated and evaluated on a held-out test set.
+
+**Headline result:** at the profit-maximising threshold of 0.34, the model contacts 37% of the 1,409 test customers and reaches 75.1% of churners (281 of 374) at 53.7% precision, for an expected profit of 42,870 under the stated assumptions. Test ROC-AUC is 0.836 (95% CI 0.815 to 0.859), against a majority-class baseline that catches zero churners.
 
 <p align="center">
   <img src="docs/images/app_prediction.png" alt="Streamlit app showing a 56.5% churn probability for a month-to-month fiber customer, flagged as high risk at the 0.34 profit threshold, with the top SHAP reasons" width="720">
@@ -38,8 +40,6 @@ These are correlations in a single snapshot. They show where churn is concentrat
 | --- | --- | --- |
 | ROC-AUC (ranking quality) | 0.836 | 0.815 to 0.859 |
 | Top-decile lift (churn rate in the riskiest 10% vs average) | 2.73x | 2.45x to 3.04x |
-| Churners caught at the 0.08 cost threshold (recall) | 94.4% | 92.1% to 96.5% |
-| Flagged customers who do churn (precision) | 39.8% | 36.4% to 43.0% |
 
 Across five different random splits the test ROC-AUC averages 0.848 (standard deviation 0.009, `reports/seed_stability.csv`), so the headline 0.836 is at the low end, not a lucky split.
 
@@ -50,11 +50,11 @@ Across five different random splits the test ROC-AUC averages 0.848 (standard de
 | Top 10% by risk | 10% | 27.3% | 72.3% |
 | Top 20% by risk | 20% | 48.4% | 64.2% |
 | Top 40% by risk | 40% | 79.1% | 52.5% |
-| Profit threshold 0.34, app default (30% offer success assumed) | 37.1% | 75.1% | 53.7% |
-| Cost threshold 0.08 | 63.0% | 94.4% | 39.8% |
+| **Profit threshold 0.34, app default (30% offer success assumed)** | **37.1%** | **75.1%** | **53.7%** |
+| Cost-only rule, threshold 0.08 | 63.0% | 94.4% | 39.8% |
 
 - If the retention team has a fixed capacity, contact the top N% by score. The top 20% reaches almost half of all churners at 2.4 times the average churn rate.
-- The cost threshold (0.08) is the cheapest rule under its own assumptions, but those assumptions treat every contacted churner as saved. The profit model below assumes only 30% are saved and recommends contacting far fewer customers (threshold 0.34). Until the real offer success rate is known, the profit threshold is the more defensible starting point, so the app uses it by default. The cost and capacity rules are one click away.
+- The cost-only rule (0.08) catches more churners, but only by contacting 63% of all customers at 40% precision. Its threshold is so low because the costs fix it almost by themselves: with 65 for a wasted offer and 780 for a missed churner, the break-even probability is 65 / (65 + 780) = 0.077. Those assumptions also treat every contacted churner as saved. The profit model below assumes only 30% are saved and recommends contacting far fewer customers (threshold 0.34). Until the real offer success rate is known, the profit threshold is the more defensible starting point, so the app uses it by default. The cost and capacity rules are one click away.
 
 **Expected profit under stated assumptions** (`profit_analysis` in the report)
 
@@ -67,7 +67,7 @@ Assumptions: an offer costs 65, a saved customer is worth 12 months of their own
 | 30% (default) | 0.34 | 523 | 42,869.50 |
 | 50% | 0.18 | 674 | 102,068.30 |
 
-At the cost threshold the 30% scenario earns 38,107.70 on the test split, less than the 42,869.50 from the profit threshold. At a 10% success rate the campaign barely breaks even, so the success rate is the number that most needs measuring.
+At the cost threshold the 30% scenario earns 38,107.70 on the test split, less than the 42,869.50 from the profit threshold. At a 10% offer success rate the campaign barely breaks even (profit 509), so the success rate should be measured in a pilot before scaling.
 
 **Proposed experiment** ([docs/experiment_plan.md](docs/experiment_plan.md))
 
@@ -133,7 +133,7 @@ The first model lives in `Customer_Churn_Prediction_Using_ML.ipynb` (commits fro
 
 ## Results
 
-All numbers come from `artifacts/training_report.json` and the files in `reports/`, and are reproducible with the commands under Usage. Threshold-dependent metrics below (recall, precision, confusion matrix, bootstrap intervals) are reported at the 0.08 cost threshold that is saved with the model.
+All numbers come from `artifacts/training_report.json` and the files in `reports/`, and are reproducible with the commands under Usage. Threshold-dependent metrics below (recall, precision, confusion matrix, bootstrap intervals) are reported at the 0.08 cost-only threshold that is saved with the model. The profit threshold of 0.34, which the app uses by default, is summarised under Findings and Recommendations.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/model_charts_dark.png">
