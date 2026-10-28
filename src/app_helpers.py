@@ -28,6 +28,18 @@ def profit_threshold(report: dict[str, Any]) -> float | None:
     return float(profit_analysis["validation_threshold"])
 
 
+def capacity_rows(report: dict[str, Any]) -> tuple[list[dict[str, Any]], str]:
+    """Capacity table whose cutoffs the app applies, and the split it came from.
+
+    Prefers the validation table; artifacts trained before it existed fall back to the test table.
+    """
+    if report.get("validation_capacity_table"):
+        return report["validation_capacity_table"], "validation"
+    if report.get("test_capacity_table"):
+        return report["test_capacity_table"], "test"
+    return [], ""
+
+
 def log_prediction(
     log_path: Path,
     inputs: dict[str, Any],

@@ -2,7 +2,7 @@ import joblib
 import numpy as np
 import pytest
 
-from src.app_helpers import explain_prediction, profit_threshold, report_cost
+from src.app_helpers import capacity_rows, explain_prediction, profit_threshold, report_cost
 from src.features import FEATURE_COLUMNS, load_dataset, original_feature_name, readable_feature_name
 from src.train import MODEL_PATH
 
@@ -25,6 +25,21 @@ def test_profit_threshold_reads_validation_threshold():
 
 def test_profit_threshold_is_none_for_older_artifacts():
     assert profit_threshold({"false_positive_cost": 65.0}) is None
+
+
+def test_capacity_rows_prefers_validation_table():
+    validation = [{"capacity": 0.2, "probability_cutoff": 0.55}]
+    test = [{"capacity": 0.2, "probability_cutoff": 0.56}]
+    assert capacity_rows({"validation_capacity_table": validation, "test_capacity_table": test}) == (validation, "validation")
+
+
+def test_capacity_rows_falls_back_to_test_table_for_older_artifacts():
+    test = [{"capacity": 0.2, "probability_cutoff": 0.56}]
+    assert capacity_rows({"test_capacity_table": test}) == (test, "test")
+
+
+def test_capacity_rows_empty_when_absent():
+    assert capacity_rows({"false_positive_cost": 65.0}) == ([], "")
 
 
 @pytest.mark.parametrize(

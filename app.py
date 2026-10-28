@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from src.app_helpers import explain_prediction, log_prediction, profit_threshold, report_cost
+from src.app_helpers import capacity_rows, explain_prediction, log_prediction, profit_threshold, report_cost
 from src.features import FORM_FIELDS, apply_internet_guard, build_input_frame, load_dataset
 from src.train import MODEL_PATH, load_or_train_bundle
 
@@ -62,16 +62,23 @@ with st.expander("Model summary", expanded=False):
     st.write("Test ROC-AUC:", round(report["test_metrics"]["roc_auc"], 4))
     st.write("Test Brier score:", round(report["test_metrics"]["brier_score"], 4))
 
-capacity_rows = report.get("test_capacity_table", [])
-if capacity_rows:
-    with st.expander("Lift and capacity tables (test split)", expanded=False):
-        st.write("Lift by decile of predicted probability (decile 1 = highest risk):")
+capacity_cutoff_rows, capacity_split = capacity_rows(report)
+if capacity_cutoff_rows:
+    with st.expander("Lift and capacity tables", expanded=False):
+        st.write("Test split, lift by decile of predicted probability (decile 1 = highest risk):")
         st.dataframe(pd.DataFrame(report["test_lift_table"]), hide_index=True)
-        st.write("Contacting the top share of customers by predicted probability:")
-        st.dataframe(pd.DataFrame(capacity_rows), hide_index=True)
+        if capacity_split == "validation":
+            st.write("Validation split, contacting the top share of customers (the capacity rule uses these cutoffs):")
+            st.dataframe(pd.DataFrame(capacity_cutoff_rows), hide_index=True)
+            if "test_outcomes_at_validation_capacity_cutoffs" in report:
+                st.write("Test split, outcome of applying the validation cutoffs:")
+                st.dataframe(pd.DataFrame(report["test_outcomes_at_validation_capacity_cutoffs"]), hide_index=True)
+        if report.get("test_capacity_table"):
+            st.write("Test split, contacting the top share of customers (evaluation only):")
+            st.dataframe(pd.DataFrame(report["test_capacity_table"]), hide_index=True)
 
 # Older artifacts have no profit analysis or capacity table, so those rules are only offered when present.
-rule_options = ([PROFIT_RULE] if profit_cutoff is not None else []) + [COST_RULE] + ([CAPACITY_RULE] if capacity_rows else [])
+rule_options = ([PROFIT_RULE] if profit_cutoff is not None else []) + [COST_RULE] + ([CAPACITY_RULE] if capacity_cutoff_rows else [])
 decision_rule = st.radio("Decision rule", rule_options, horizontal=True)
 capacity_threshold = None
 if decision_rule == PROFIT_RULE:
@@ -83,7 +90,7 @@ if decision_rule == PROFIT_RULE:
 elif decision_rule == COST_RULE:
     st.caption("Threshold that minimised validation expected cost, assuming every contacted churner is saved.")
 elif decision_rule == CAPACITY_RULE:
-    capacity_lookup = {row["capacity"]: row for row in capacity_rows}
+    capacity_lookup = {row["capacity"]: row for row in capacity_cutoff_rows}
     selected_capacity = st.selectbox(
         "Contact the top share of customers",
         list(capacity_lookup),
@@ -91,7 +98,7 @@ elif decision_rule == CAPACITY_RULE:
     )
     capacity_threshold = float(capacity_lookup[selected_capacity]["probability_cutoff"])
     st.caption(
-        f"Probability cutoff for the top {selected_capacity:.0%} on the test split: {capacity_threshold:.3f}. "
+        f"Probability cutoff for the top {selected_capacity:.0%} on the {capacity_split} split: {capacity_threshold:.3f}. "
         "Customers at or above it are flagged."
     )
 

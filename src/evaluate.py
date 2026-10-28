@@ -201,6 +201,37 @@ def capacity_table(
     return pd.DataFrame(rows)
 
 
+def outcomes_at_cutoffs(
+    target: np.ndarray,
+    probabilities: np.ndarray,
+    cutoffs,
+    false_positive_cost: float = FALSE_POSITIVE_COST,
+    false_negative_cost: float = FALSE_NEGATIVE_COST,
+) -> pd.DataFrame:
+    """Outcome of flagging every customer at or above each fixed probability cutoff."""
+    target = np.asarray(target).astype(int)
+    probabilities = np.asarray(probabilities, dtype=float)
+    total = len(target)
+    total_churners = int(target.sum())
+
+    rows = []
+    for cutoff in cutoffs:
+        cost = cost_at_threshold(target, probabilities, cutoff, false_positive_cost, false_negative_cost)
+        contacted = int((probabilities >= cutoff).sum())
+        true_positives = contacted - cost["false_positives"]
+        rows.append(
+            {
+                "probability_cutoff": float(cutoff),
+                "customers_contacted": contacted,
+                "share_contacted": float(contacted / total) if total else 0.0,
+                "recall": float(true_positives / total_churners) if total_churners else 0.0,
+                "precision": float(true_positives / contacted) if contacted else 0.0,
+                "expected_cost": cost["expected_cost"],
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def _point_metrics(
     target: np.ndarray,
     probabilities: np.ndarray,

@@ -30,6 +30,8 @@ def test_train_model_runs_end_to_end_on_a_small_sample(tmp_path, monkeypatch):
         "cv_fold_scores",
         "test_lift_table",
         "test_capacity_table",
+        "validation_capacity_table",
+        "test_outcomes_at_validation_capacity_cutoffs",
         "test_bootstrap_ci",
         "model_comparison",
         "logistic_odds_ratios",

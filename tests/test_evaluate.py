@@ -9,6 +9,7 @@ from src.evaluate import (
     expected_cost_curve,
     lift_table,
     logistic_odds_ratios,
+    outcomes_at_cutoffs,
     profit_curve,
 )
 
@@ -66,6 +67,26 @@ def test_capacity_table_full_contact_gives_full_recall():
     assert full["recall"] == pytest.approx(1.0)
     assert full["probability_cutoff"] == pytest.approx(probabilities.min())
     assert table["recall"].is_monotonic_increasing
+
+
+def test_outcomes_at_cutoffs_on_hand_made_example():
+    target = np.array([1, 0, 1, 0, 0])
+    probabilities = np.array([0.9, 0.8, 0.6, 0.3, 0.1])
+
+    table = outcomes_at_cutoffs(target, probabilities, [0.7, 0.5, 0.95], false_positive_cost=1, false_negative_cost=10)
+
+    # 0.7 flags 0.9 and 0.8: one churner and one non-churner, one churner missed.
+    assert table.loc[0].to_dict() == pytest.approx(
+        {"probability_cutoff": 0.7, "customers_contacted": 2, "share_contacted": 0.4, "recall": 0.5, "precision": 0.5, "expected_cost": 11.0}
+    )
+    # 0.5 flags both churners and one non-churner.
+    assert table.loc[1].to_dict() == pytest.approx(
+        {"probability_cutoff": 0.5, "customers_contacted": 3, "share_contacted": 0.6, "recall": 1.0, "precision": 2 / 3, "expected_cost": 1.0}
+    )
+    # Nobody at or above 0.95: precision is reported as 0 rather than dividing by zero.
+    assert table.loc[2].to_dict() == pytest.approx(
+        {"probability_cutoff": 0.95, "customers_contacted": 0, "share_contacted": 0.0, "recall": 0.0, "precision": 0.0, "expected_cost": 20.0}
+    )
 
 
 def test_bootstrap_metrics_interval_contains_estimate_and_is_reproducible():
