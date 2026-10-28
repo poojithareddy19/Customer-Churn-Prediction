@@ -116,17 +116,29 @@ FORM_FIELDS = [
 ]
 
 
-def load_dataset(dataset_path: Path = DATASET_PATH) -> pd.DataFrame:
-    frame = pd.read_csv(dataset_path)
-    frame = frame.drop(columns=[CUSTOMER_ID_COLUMN], errors="ignore")
+def clean_frame(frame: pd.DataFrame, require_target: bool = False) -> pd.DataFrame:
+    """Apply the dataset cleaning steps to a copy of a raw Telco-format frame.
+
+    The Churn column is mapped to 0/1 when present; require_target=True makes it mandatory.
+    """
+    frame = frame.copy()
     frame["TotalCharges"] = pd.to_numeric(frame["TotalCharges"], errors="coerce")
     # Blank TotalCharges only occurs for customers with tenure 0 (not billed yet), so 0.0 is the
     # semantically correct value. The median imputer in the pipeline stays as a safety net.
     not_yet_billed = frame["TotalCharges"].isna() & (frame["tenure"] == 0)
     frame.loc[not_yet_billed, "TotalCharges"] = 0.0
-    frame[TARGET_COLUMN] = frame[TARGET_COLUMN].map({"No": 0, "Yes": 1})
+    if TARGET_COLUMN in frame:
+        frame[TARGET_COLUMN] = frame[TARGET_COLUMN].map({"No": 0, "Yes": 1})
+    elif require_target:
+        raise ValueError(f"missing target column {TARGET_COLUMN}")
     frame["SeniorCitizen"] = frame["SeniorCitizen"].astype(int)
     return frame
+
+
+def load_dataset(dataset_path: Path = DATASET_PATH) -> pd.DataFrame:
+    frame = pd.read_csv(dataset_path)
+    frame = frame.drop(columns=[CUSTOMER_ID_COLUMN], errors="ignore")
+    return clean_frame(frame, require_target=True)
 
 
 def split_features_target(frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
