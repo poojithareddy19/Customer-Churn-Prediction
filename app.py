@@ -5,7 +5,14 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from src.app_helpers import capacity_rows, explain_prediction, log_prediction, profit_threshold, report_cost
+from src.app_helpers import (
+    capacity_rows,
+    expected_contact_value,
+    explain_prediction,
+    log_prediction,
+    profit_threshold,
+    report_cost,
+)
 from src.features import FORM_FIELDS, apply_internet_guard, build_input_frame, load_dataset
 from src.train import MODEL_PATH, load_or_train_bundle
 
@@ -151,8 +158,30 @@ if submit_button:
         st.success(f"Lower churn risk: {churn_probability:.1%} probability")
 
     cost_columns = st.columns(2)
-    cost_columns[0].metric("Expected cost if not contacted", f"{cost_if_not_contacted:,.0f}")
-    cost_columns[1].metric("Expected cost if contacted", f"{cost_if_contacted:,.0f}")
+    if decision_rule == PROFIT_RULE:
+        assumptions = report["profit_analysis"]["assumptions"]
+        contact_value = expected_contact_value(
+            churn_probability,
+            float(values["MonthlyCharges"]),
+            assumptions["offer_cost"],
+            assumptions["offer_success_rate"],
+            assumptions["retention_months"],
+        )
+        cost_columns[0].metric("Expected value of contacting", f"{contact_value:,.0f}")
+        cost_columns[1].metric("Expected value of not contacting", "0")
+        st.caption(
+            f"Value of contacting = probability x {assumptions['offer_success_rate']:.0%} saved x MonthlyCharges x "
+            f"{assumptions['retention_months']:.0f} months - offer cost {assumptions['offer_cost']:,.0f}. "
+            "The success rate is an assumption, not measured data."
+        )
+        st.caption(
+            "The profit threshold maximises total profit across all validation customers, so it does not depend on this "
+            "customer's charges. A customer can have a positive expected value and still fall below the threshold, "
+            "or a negative one and be above it."
+        )
+    else:
+        cost_columns[0].metric("Expected cost if not contacted", f"{cost_if_not_contacted:,.0f}")
+        cost_columns[1].metric("Expected cost if contacted", f"{cost_if_contacted:,.0f}")
     st.write("Decision rule:", decision_rule)
     st.write("Prediction threshold used:", f"{decision_threshold:.3f}")
 

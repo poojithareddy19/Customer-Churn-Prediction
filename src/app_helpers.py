@@ -28,6 +28,21 @@ def profit_threshold(report: dict[str, Any]) -> float | None:
     return float(profit_analysis["validation_threshold"])
 
 
+def expected_contact_value(
+    probability: float,
+    monthly_charges: float,
+    offer_cost: float,
+    success_rate: float,
+    retention_months: float,
+) -> float:
+    """Expected profit of contacting one customer, relative to not contacting them (value 0).
+
+    This is the per-customer expectation of the profit formula in evaluate.profit_curve(): the churn
+    probability stands in for the churn label.
+    """
+    return probability * success_rate * monthly_charges * retention_months - offer_cost
+
+
 def capacity_rows(report: dict[str, Any]) -> tuple[list[dict[str, Any]], str]:
     """Capacity table whose cutoffs the app applies, and the split it came from.
 
