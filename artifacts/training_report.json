@@ -519,6 +519,112 @@
       "expected_cost": 60385.0
     }
   ],
+  "validation_capacity_table": [
+    {
+      "capacity": 0.05,
+      "customers_contacted": 71,
+      "probability_cutoff": 0.7261721230449392,
+      "recall": 0.15508021390374332,
+      "precision": 0.8169014084507042,
+      "expected_cost": 247325.0
+    },
+    {
+      "capacity": 0.1,
+      "customers_contacted": 141,
+      "probability_cutoff": 0.660592869254682,
+      "recall": 0.29411764705882354,
+      "precision": 0.7801418439716312,
+      "expected_cost": 207935.0
+    },
+    {
+      "capacity": 0.2,
+      "customers_contacted": 282,
+      "probability_cutoff": 0.5379449409650671,
+      "recall": 0.5133689839572193,
+      "precision": 0.6808510638297872,
+      "expected_cost": 147810.0
+    },
+    {
+      "capacity": 0.3,
+      "customers_contacted": 423,
+      "probability_cutoff": 0.4052335567723359,
+      "recall": 0.6871657754010695,
+      "precision": 0.607565011820331,
+      "expected_cost": 102050.0
+    },
+    {
+      "capacity": 0.4,
+      "customers_contacted": 564,
+      "probability_cutoff": 0.27605392098879555,
+      "recall": 0.8074866310160428,
+      "precision": 0.5354609929078015,
+      "expected_cost": 73190.0
+    },
+    {
+      "capacity": 0.5,
+      "customers_contacted": 705,
+      "probability_cutoff": 0.17061800116165668,
+      "recall": 0.8850267379679144,
+      "precision": 0.4695035460992908,
+      "expected_cost": 57850.0
+    }
+  ],
+  "test_outcomes_at_validation_capacity_cutoffs": [
+    {
+      "capacity": 0.05,
+      "probability_cutoff": 0.7261721230449392,
+      "customers_contacted": 67,
+      "share_contacted": 0.047551454932576294,
+      "recall": 0.1497326203208556,
+      "precision": 0.835820895522388,
+      "expected_cost": 248755.0
+    },
+    {
+      "capacity": 0.1,
+      "probability_cutoff": 0.660592869254682,
+      "customers_contacted": 147,
+      "share_contacted": 0.10432931156848829,
+      "recall": 0.2807486631016043,
+      "precision": 0.7142857142857143,
+      "expected_cost": 212550.0
+    },
+    {
+      "capacity": 0.2,
+      "probability_cutoff": 0.5379449409650671,
+      "customers_contacted": 308,
+      "share_contacted": 0.21859474804826118,
+      "recall": 0.5187165775401069,
+      "precision": 0.6298701298701299,
+      "expected_cost": 147810.0
+    },
+    {
+      "capacity": 0.3,
+      "probability_cutoff": 0.4052335567723359,
+      "customers_contacted": 432,
+      "share_contacted": 0.3066004258339248,
+      "recall": 0.6524064171122995,
+      "precision": 0.5648148148148148,
+      "expected_cost": 113620.0
+    },
+    {
+      "capacity": 0.4,
+      "probability_cutoff": 0.27605392098879555,
+      "customers_contacted": 578,
+      "share_contacted": 0.41022001419446413,
+      "recall": 0.7967914438502673,
+      "precision": 0.5155709342560554,
+      "expected_cost": 77480.0
+    },
+    {
+      "capacity": 0.5,
+      "probability_cutoff": 0.17061800116165668,
+      "customers_contacted": 682,
+      "share_contacted": 0.48403122782114977,
+      "recall": 0.8609625668449198,
+      "precision": 0.47214076246334313,
+      "expected_cost": 63960.0
+    }
+  ],
   "test_bootstrap_ci": {
     "n_boot": 1000,
     "n_skipped": 0,
@@ -710,7 +816,7 @@
       }
     ]
   },
-  "run_timestamp": "2026-10-08T12:34:44+00:00",
-  "git_commit": "f2d33f317f03b030d9f0ee7ce351778d9316c34a",
+  "run_timestamp": "2026-10-28T09:04:22+00:00",
+  "git_commit": "77a257e5a53106725c853db1ae87900279a8b5cb",
   "git_dirty": false
 }
