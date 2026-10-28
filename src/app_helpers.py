@@ -62,8 +62,12 @@ def log_prediction(
     decision_rule: str,
     threshold: float,
     verdict: str,
+    warning: str | None = None,
 ) -> dict[str, Any]:
-    """Append one prediction as a JSON line with a UTC timestamp and return the record."""
+    """Append one prediction as a JSON line with a UTC timestamp and return the record.
+
+    warning holds the input plausibility message shown to the user, or None.
+    """
     record = {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "inputs": inputs,
@@ -71,6 +75,7 @@ def log_prediction(
         "decision_rule": decision_rule,
         "threshold": float(threshold),
         "verdict": verdict,
+        "warning": warning,
     }
     log_path = Path(log_path)
     log_path.parent.mkdir(parents=True, exist_ok=True)

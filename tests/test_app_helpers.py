@@ -136,4 +136,17 @@ def test_log_prediction_appends_json_lines(tmp_path):
     assert records[0]["inputs"]["Contract"] == "Month-to-month"
     assert records[1]["decision_rule"] == "Capacity (top N%)"
     assert records[0]["timestamp_utc"].endswith("+00:00")
-    assert set(records[0]) == {"timestamp_utc", "inputs", "probability", "decision_rule", "threshold", "verdict"}
+    assert set(records[0]) == {"timestamp_utc", "inputs", "probability", "decision_rule", "threshold", "verdict", "warning"}
+    assert records[0]["warning"] is None
+
+
+def test_log_prediction_records_optional_warning(tmp_path):
+    import json
+
+    from src.app_helpers import log_prediction
+
+    log_path = tmp_path / "predictions.jsonl"
+    log_prediction(log_path, {"tenure": 0}, 0.4, "Cost threshold", 0.08, "high risk", warning="tenure is 0")
+
+    record = json.loads(log_path.read_text(encoding="utf-8"))
+    assert record["warning"] == "tenure is 0"

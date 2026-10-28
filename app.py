@@ -13,7 +13,7 @@ from src.app_helpers import (
     profit_threshold,
     report_cost,
 )
-from src.features import FORM_FIELDS, apply_internet_guard, build_input_frame, load_dataset
+from src.features import FORM_FIELDS, apply_internet_guard, build_input_frame, charges_warning, load_dataset
 from src.train import MODEL_PATH, load_or_train_bundle
 
 PROFIT_RULE = "Profit threshold"
@@ -146,12 +146,18 @@ if submit_button:
     cost_if_contacted = false_positive_cost * (1 - churn_probability)
 
     verdict = "high risk" if churn_prediction else "lower risk"
+    # The warning is informational only: the model still scores the values exactly as entered.
+    input_warning = charges_warning(guarded_values)
     try:
-        log_prediction(PREDICTION_LOG_PATH, guarded_values, churn_probability, decision_rule, decision_threshold, verdict)
+        log_prediction(
+            PREDICTION_LOG_PATH, guarded_values, churn_probability, decision_rule, decision_threshold, verdict, input_warning
+        )
     except Exception as error:  # Logging must never break a prediction.
         st.caption(f"Warning: prediction was not logged ({type(error).__name__}).")
 
     st.subheader("Prediction Result")
+    if input_warning is not None:
+        st.warning(input_warning)
     if churn_prediction:
         st.error(f"High churn risk: {churn_probability:.1%} probability")
     else:
