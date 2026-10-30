@@ -14,7 +14,7 @@ Five candidate pipelines across three model families (logistic regression, Rando
 **Headline result:** at the profit-maximising threshold of 0.34, the model contacts 37% of the 1,409 test customers and reaches 75.1% of churners (281 of 374) at 53.7% precision, for an expected profit of 42,870 under the stated assumptions. Test ROC-AUC is 0.836 (95% CI 0.815 to 0.859), against a majority-class baseline that catches zero churners.
 
 <p align="center">
-  <img src="docs/images/app_prediction.png" alt="Streamlit app showing a 56.5% churn probability for a month-to-month fiber customer, flagged as high risk at the 0.34 profit threshold, with the top SHAP reasons" width="720">
+  <img src="docs/images/app_prediction.png" alt="Streamlit app showing a 56.5% churn probability for a month-to-month fiber customer, flagged as high risk at the 0.34 profit threshold, with the TotalCharges warning, the expected value of contacting (77) and the top SHAP reasons" width="720">
 </p>
 
 **Contents:** [Findings](#findings-and-recommendations) · [Problem](#problem) · [Dataset](#dataset) · [Pipeline](#pipeline) · [First version](#what-was-wrong-with-the-first-version) · [Results](#results) · [Feature importance](#feature-importance) · [Segment analysis](#segment-analysis) · [Monitoring](#monitoring) · [Project structure](#project-structure) · [Installation](#installation) · [Usage](#usage) · [Design decisions](#design-decisions) · [Limitations](#limitations) · [Roadmap](#roadmap)
