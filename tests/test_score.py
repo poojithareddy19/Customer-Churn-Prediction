@@ -7,7 +7,16 @@ from src.app_helpers import profit_threshold
 from src.features import DATASET_PATH, FEATURE_COLUMNS, apply_internet_guard, build_input_frame, clean_frame
 from src.train import load_or_train_bundle
 
-EXPECTED_COLUMNS = ["customerID", "churn_probability", "risk_rank", "decision_rule", "threshold", "flagged", "charges_warning"]
+EXPECTED_COLUMNS = [
+    "customerID",
+    "churn_probability",
+    "risk_rank",
+    "decision_rule",
+    "threshold",
+    "flagged",
+    "charges_warning",
+    "category_warning",
+]
 
 
 @pytest.fixture(scope="module")
@@ -78,6 +87,7 @@ def test_capacity_rule_flags_top_share(tmp_path, sample_csv):
     assert scored["flagged"].sum() == 40
     assert set(scored.loc[scored["flagged"], "risk_rank"]) == set(range(1, 41))
     assert scored["threshold"].isna().all()
+    assert (scored["decision_rule"] == "capacity").all()
 
 
 def test_missing_feature_column_fails_and_names_it(tmp_path, sample_csv, capsys):
@@ -99,6 +109,39 @@ def test_profit_rule_uses_report_profit_threshold(tmp_path, sample_csv):
     assert code == 0
     assert (scored["threshold"] == cutoff).all()
     assert (scored["flagged"] == (scored["churn_probability"] >= cutoff)).all()
+
+
+def test_unknown_and_blank_categories_are_scored_and_flagged(tmp_path, capsys):
+    bundle = load_or_train_bundle()
+    rows = pd.read_csv(DATASET_PATH).head(3).copy()
+    rows.loc[0, "Contract"] = "Monthly"
+    rows.loc[1, "PaymentMethod"] = None
+    input_path = tmp_path / "categories.csv"
+    rows.to_csv(input_path, index=False)
+
+    code, output_path = _run(tmp_path, input_path)
+    scored = pd.read_csv(output_path)
+
+    assert code == 0
+    assert "blank or unknown category values in 2 of 3 rows" in capsys.readouterr().out
+    assert "Contract has unknown value 'Monthly'" in scored.loc[0, "category_warning"]
+    assert "PaymentMethod is blank" in scored.loc[1, "category_warning"]
+    assert pd.isna(scored.loc[2, "category_warning"])
+    values = clean_frame(pd.read_csv(input_path))[FEATURE_COLUMNS].to_dict(orient="records")
+    app_probabilities = [
+        float(bundle.model.predict_proba(build_input_frame(apply_internet_guard(row), bundle.feature_columns))[0, 1])
+        for row in values
+    ]
+    assert np.allclose(scored["churn_probability"], app_probabilities, rtol=0, atol=1e-12)
+
+
+def test_threshold_override_is_labelled(tmp_path, sample_csv):
+    _, output_path = _run(tmp_path, sample_csv, "--rule", "cost", "--threshold", "0.4")
+    scored = pd.read_csv(output_path)
+
+    assert (scored["decision_rule"] == "cost (override)").all()
+    assert (scored["threshold"] == 0.4).all()
+    assert (scored["flagged"] == (scored["churn_probability"] >= 0.4)).all()
 
 
 def test_missing_artifact_fails_instead_of_training(tmp_path, sample_csv, monkeypatch, capsys):

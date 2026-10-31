@@ -6,7 +6,7 @@ This file describes how the code behaves. The README covers the findings and res
 
 | Path | Role |
 | --- | --- |
-| `src/features.py` | Dataset loading and cleaning (`load_dataset`, `clean_frame`), preprocessing, form schema, cost and profit assumptions, input guards (`apply_internet_guard`, `charges_warning`) |
+| `src/features.py` | Dataset loading and cleaning (`load_dataset`, `clean_frame`), preprocessing, form schema, cost and profit assumptions, input guards (`apply_internet_guard`, `charges_warning`, `category_warning`) |
 | `src/train.py` | Splitting, candidate comparison, tuning, calibration, threshold selection, report and artifact export (`train_model`, `load_or_train_bundle`) |
 | `src/evaluate.py` | Metrics, expected cost curve, lift and capacity tables, `outcomes_at_cutoffs`, bootstrap intervals, odds ratios, profit curve |
 | `src/app_helpers.py` | Streamlit-free helpers for the app: report key fallbacks (`report_cost`, `profit_threshold`, `capacity_rows`), `expected_contact_value`, prediction logging, SHAP explanation |
@@ -72,8 +72,9 @@ python -m src.score --input customers.csv --output scored.csv [--rule profit|cos
 
 - The input needs the 19 feature columns; `customerID` is copied to the output when present. Missing columns are listed in the error.
 - Rows go through `clean_frame()`, then `apply_internet_guard()` row by row, and are scored with the saved model. The scores equal the app path exactly.
-- `profit` uses the report's profit threshold, `cost` uses the threshold saved with the model, and `--threshold` overrides either. `capacity` flags the top share of the input file by score, ties keeping file order, with the same rounding as `capacity_table()` (0.2 of 7,043 rows flags 1,409). This differs from the app, which applies a fixed cutoff to one customer at a time.
-- Output columns: `customerID` (if present), `churn_probability`, `risk_rank` (1 = highest), `decision_rule`, `threshold` (empty for capacity), `flagged`, `charges_warning`.
+- `profit` uses the report's profit threshold, `cost` uses the threshold saved with the model, and `--threshold` overrides either; `decision_rule` then reads `profit (override)` or `cost (override)`. `capacity` flags the top share of the input file by score, ties keeping file order, with the same rounding as `capacity_table()` (0.2 of 7,043 rows flags 1,409). This differs from the app, which applies a fixed cutoff to one customer at a time.
+- Output columns: `customerID` (if present), `churn_probability`, `risk_rank` (1 = highest), `decision_rule`, `threshold` (empty for capacity), `flagged`, `charges_warning`, `category_warning`.
+- `category_warning()` names categorical fields that are blank or hold a value not seen in training (the values in `FIELD_OPTIONS`, which match the dataset exactly). Such rows are still scored: the one-hot encoder ignores unknown values and the imputer fills blanks. A summary line on stdout gives the number of affected rows.
 - Expected errors print one line to stderr and exit 1 without a traceback: missing or empty file, no rows, missing columns, non-numeric `SeniorCitizen`, `tenure` or `MonthlyCharges`, non-numeric non-blank `TotalCharges`, `--capacity` outside (0, 1], `--threshold` with the capacity rule, and a missing artifact.
 - The command never trains, and it does not write to `logs/predictions.jsonl`.
 
@@ -97,14 +98,14 @@ pip install -r requirements-dev.txt      # adds pytest and MLflow
 python -m pytest -q
 ```
 
-62 tests across 8 modules:
+66 tests across 8 modules:
 
 | Module | Tests | Covers |
 | --- | --- | --- |
 | `tests/test_app_helpers.py` | 18 | Report key fallbacks, `capacity_rows`, `expected_contact_value` (including consistency with `profit_curve`), prediction logging with and without a warning, SHAP explanations |
 | `tests/test_evaluate.py` | 11 | Cost curve, lift and capacity tables, `outcomes_at_cutoffs`, bootstrap intervals, odds ratios, profit curve |
-| `tests/test_features.py` | 9 | Guards, input frame order, `load_dataset` cleaning, `charges_warning` on all 7,043 rows and on implausible inputs |
-| `tests/test_score.py` | 7 | Batch output shape and IDs, equality with the app path, the guard on inconsistent rows, the capacity rule, the profit threshold, missing column and missing artifact errors |
+| `tests/test_features.py` | 11 | Guards, input frame order, `load_dataset` cleaning, `charges_warning` and `category_warning` on all 7,043 rows and on bad inputs |
+| `tests/test_score.py` | 9 | Batch output shape and IDs, equality with the app path, the guard on inconsistent rows, unknown and blank categories, the capacity rule, the profit threshold, override labelling, missing column and missing artifact errors |
 | `tests/test_segments.py` | 7 | DuckDB segment queries and Wilson intervals |
 | `tests/test_experiment.py` | 4 | Sample size and SRM check |
 | `tests/test_monitoring.py` | 4 | Population stability index |
@@ -119,8 +120,7 @@ CI (`.github/workflows/ci.yml`) runs the suite on every push and pull request wi
 - **Capacity cutoffs are a fixed probability, not a live ranking.** The app's capacity rule applies the validation cutoff to one customer at a time, so the share flagged in practice depends on the incoming population. On the test split the realised share was 4.8% to 21.9% for targets of 5% to 20%, and 48.4% for 50%.
 - **Calibration mismatch for operational values.** Thresholds and capacity cutoffs come from the model calibrated on the training split, while the deployed model is recalibrated on train plus validation. The convention is consistent across all three, but the deployed probabilities are on a slightly different scale.
 - **The default form triggers the TotalCharges warning.** The defaults (tenure 12, MonthlyCharges 70, TotalCharges 1,500) give a ratio of 1.79. They were kept on purpose so the default prediction (56.5%) stays the documented example.
-- **Batch scoring does not validate category values.** An unknown category (for example a misspelt contract type) is encoded as all zeros by the one-hot encoder and scored without a warning. A blank `TotalCharges` with tenure above 0 is filled by the pipeline's median imputer.
-- **`--threshold` is not labelled as an override.** The output's `decision_rule` still reads `profit` or `cost`, and only the `threshold` column shows the override value.
+- **Batch scoring flags bad categories but does not reject them.** A row with an unknown or blank category value is scored with that field encoded as all zeros or imputed, and is named in `category_warning`; its score is less reliable. A blank `TotalCharges` with tenure above 0 is filled by the pipeline's median imputer without a warning.
 - **SHAP explains the uncalibrated model.** Sigmoid calibration is monotonic, so the direction and ranking hold, but the values are in log-odds of the base model, not changes in the displayed probability.
 
 ### Modelling and data
@@ -133,9 +133,9 @@ CI (`.github/workflows/ci.yml`) runs the suite on every push and pull request wi
 ## Verification Notes
 
 - **Baseline.** Before the gap fixes, `main` at `8d476ae` had 43 passing tests on Python 3.11.16.
-- **Retraining.** After the fixes the model was retrained on Python 3.11.16. Every value that existed in the report before is unchanged (float tolerance 1e-9, excluding `run_timestamp`, `git_commit` and `git_dirty`). The only additions are `validation_capacity_table` and `test_outcomes_at_validation_capacity_cutoffs`. The new model gives exactly the same probabilities as the previous one on all 7,043 rows. The report records commit `77a257e` with `git_dirty: false`, and `src/` has not changed since.
+- **Retraining.** After the fixes the model was retrained on Python 3.11.16. Every value that existed in the report before is unchanged (float tolerance 1e-9, excluding `run_timestamp`, `git_commit` and `git_dirty`). The only additions are `validation_capacity_table` and `test_outcomes_at_validation_capacity_cutoffs`. The new model gives exactly the same probabilities as the previous one on all 7,043 rows. The report records commit `77a257e` with `git_dirty: false`. The later changes to `src/` only add `category_warning()` and change the batch scoring output; the training code path (`train.py`, `evaluate.py`, `load_dataset()` and the preprocessing) is unchanged since that commit, so the artifact still reflects it.
 - **Reports.** All seven report scripts were rerun on the retrained model, and every file in `reports/` and `docs/images/` came out byte-identical. `docs/images/app_prediction.png` was then retaken separately to show the warning and the profit-mode metrics.
 - **Environment.** Fresh Python 3.11 environments built from `main`'s and the branch's `requirements.txt` give identical `pip freeze` output.
 - **Independent audit.** An audit of commit `68a3939` in a separate session found 46 PASS, 0 FAIL, 2 low-severity WARN and 1 N/A. The N/A was the CI run status, which could not be checked without GitHub access. The two WARNs:
-  - Batch scoring accepts unknown category values (listed under Limitations).
-  - No test caught a missing guard call in `src/score.py`. This was fixed in a later commit that adds `test_inconsistent_rows_are_guarded_like_the_app`, which fails when the guard is removed.
+  - Batch scoring accepted unknown category values silently. Later commits add the `category_warning` column and label `--threshold` overrides in `decision_rule`, which the audit also asked about.
+  - No test caught a missing guard call in `src/score.py`. A later commit adds `test_inconsistent_rows_are_guarded_like_the_app`, which fails when the guard is removed.

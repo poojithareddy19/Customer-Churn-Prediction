@@ -210,6 +210,22 @@ def charges_warning(values: dict[str, Any]) -> str | None:
     )
 
 
+def category_warning(values: dict[str, Any]) -> str | None:
+    """Message listing categorical fields that are blank or not a value seen in training, otherwise None.
+
+    The one-hot encoder ignores unknown values (all zeros) and the imputer fills blanks, so such rows
+    are still scored; this only makes the problem visible. Does not change the inputs.
+    """
+    problems = []
+    for feature in CATEGORICAL_FEATURES:
+        value = values.get(feature)
+        if value is None or (isinstance(value, float) and pd.isna(value)):
+            problems.append(f"{feature} is blank")
+        elif value not in FIELD_OPTIONS[feature]:
+            problems.append(f"{feature} has unknown value {value!r}")
+    return "; ".join(problems) if problems else None
+
+
 def original_feature_name(transformed_name: str) -> str:
     """Map a preprocessor output name such as "categorical__Contract_Two year" back to "Contract"."""
     if transformed_name.startswith("numeric__"):
