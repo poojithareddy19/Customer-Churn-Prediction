@@ -359,7 +359,7 @@ The app appends every prediction to `logs/predictions.jsonl`. Streamlit Cloud st
 ├── docs/
 │   ├── experiment_plan.md                     # retention offer experiment design
 │   └── images/                                # README screenshot and charts
-├── tests/                                     # pytest suite, 61 tests across 8 modules (incl. test_score.py)
+├── tests/                                     # pytest suite, 62 tests across 8 modules (incl. test_score.py)
 ├── artifacts/                                 # committed; regenerate with python -m src.train
 │   ├── churn_model.joblib                     # {model, threshold, report, feature_columns}
 │   └── training_report.json
@@ -368,6 +368,7 @@ The app appends every prediction to `logs/predictions.jsonl`. Streamlit Cloud st
 ├── WA_Fn-UseC_-Telco-Customer-Churn.csv       # dataset
 ├── requirements.txt                           # app, training and analysis dependencies (SciPy pinned explicitly)
 ├── requirements-dev.txt                       # adds pytest and MLflow
+├── DOCUMENTATION.md                           # technical reference: behaviour, usage, testing, limitations
 └── README.md
 ```
 
@@ -445,7 +446,7 @@ python -m src.train
 
 The profit analysis in the report uses three more assumptions, also read at training time: `CHURN_OFFER_COST` (default 65), `CHURN_OFFER_SUCCESS_RATE` (default 0.30, the share of contacted churners who stay, which is an assumption and not measured in this data) and `CHURN_RETENTION_MONTHS` (default 12). They set the profit threshold the app uses by default, and do not change the cost threshold saved with the model.
 
-Run the 61 tests (installs pytest and MLflow on top of the app dependencies). With MLflow installed, `python -m src.train` also logs each run to a local `mlflow.db` (ignored by git); view it with `mlflow ui --backend-store-uri sqlite:///mlflow.db`.
+Run the 62 tests (installs pytest and MLflow on top of the app dependencies). With MLflow installed, `python -m src.train` also logs each run to a local `mlflow.db` (ignored by git); view it with `mlflow ui --backend-store-uri sqlite:///mlflow.db`.
 
 ```bash
 pip install -r requirements-dev.txt
