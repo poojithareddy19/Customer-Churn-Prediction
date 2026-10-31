@@ -5,8 +5,15 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from src.app_helpers import explain_prediction, log_prediction, profit_threshold, report_cost
-from src.features import FORM_FIELDS, apply_internet_guard, build_input_frame, load_dataset
+from src.app_helpers import (
+    capacity_rows,
+    expected_contact_value,
+    explain_prediction,
+    log_prediction,
+    profit_threshold,
+    report_cost,
+)
+from src.features import FORM_FIELDS, apply_internet_guard, build_input_frame, charges_warning, load_dataset
 from src.train import MODEL_PATH, load_or_train_bundle
 
 PROFIT_RULE = "Profit threshold"
@@ -62,16 +69,23 @@ with st.expander("Model summary", expanded=False):
     st.write("Test ROC-AUC:", round(report["test_metrics"]["roc_auc"], 4))
     st.write("Test Brier score:", round(report["test_metrics"]["brier_score"], 4))
 
-capacity_rows = report.get("test_capacity_table", [])
-if capacity_rows:
-    with st.expander("Lift and capacity tables (test split)", expanded=False):
-        st.write("Lift by decile of predicted probability (decile 1 = highest risk):")
+capacity_cutoff_rows, capacity_split = capacity_rows(report)
+if capacity_cutoff_rows:
+    with st.expander("Lift and capacity tables", expanded=False):
+        st.write("Test split, lift by decile of predicted probability (decile 1 = highest risk):")
         st.dataframe(pd.DataFrame(report["test_lift_table"]), hide_index=True)
-        st.write("Contacting the top share of customers by predicted probability:")
-        st.dataframe(pd.DataFrame(capacity_rows), hide_index=True)
+        if capacity_split == "validation":
+            st.write("Validation split, contacting the top share of customers (the capacity rule uses these cutoffs):")
+            st.dataframe(pd.DataFrame(capacity_cutoff_rows), hide_index=True)
+            if "test_outcomes_at_validation_capacity_cutoffs" in report:
+                st.write("Test split, outcome of applying the validation cutoffs:")
+                st.dataframe(pd.DataFrame(report["test_outcomes_at_validation_capacity_cutoffs"]), hide_index=True)
+        if report.get("test_capacity_table"):
+            st.write("Test split, contacting the top share of customers (evaluation only):")
+            st.dataframe(pd.DataFrame(report["test_capacity_table"]), hide_index=True)
 
 # Older artifacts have no profit analysis or capacity table, so those rules are only offered when present.
-rule_options = ([PROFIT_RULE] if profit_cutoff is not None else []) + [COST_RULE] + ([CAPACITY_RULE] if capacity_rows else [])
+rule_options = ([PROFIT_RULE] if profit_cutoff is not None else []) + [COST_RULE] + ([CAPACITY_RULE] if capacity_cutoff_rows else [])
 decision_rule = st.radio("Decision rule", rule_options, horizontal=True)
 capacity_threshold = None
 if decision_rule == PROFIT_RULE:
@@ -83,7 +97,7 @@ if decision_rule == PROFIT_RULE:
 elif decision_rule == COST_RULE:
     st.caption("Threshold that minimised validation expected cost, assuming every contacted churner is saved.")
 elif decision_rule == CAPACITY_RULE:
-    capacity_lookup = {row["capacity"]: row for row in capacity_rows}
+    capacity_lookup = {row["capacity"]: row for row in capacity_cutoff_rows}
     selected_capacity = st.selectbox(
         "Contact the top share of customers",
         list(capacity_lookup),
@@ -91,7 +105,7 @@ elif decision_rule == CAPACITY_RULE:
     )
     capacity_threshold = float(capacity_lookup[selected_capacity]["probability_cutoff"])
     st.caption(
-        f"Probability cutoff for the top {selected_capacity:.0%} on the test split: {capacity_threshold:.3f}. "
+        f"Probability cutoff for the top {selected_capacity:.0%} on the {capacity_split} split: {capacity_threshold:.3f}. "
         "Customers at or above it are flagged."
     )
 
@@ -132,20 +146,48 @@ if submit_button:
     cost_if_contacted = false_positive_cost * (1 - churn_probability)
 
     verdict = "high risk" if churn_prediction else "lower risk"
+    # The warning is informational only: the model still scores the values exactly as entered.
+    input_warning = charges_warning(guarded_values)
     try:
-        log_prediction(PREDICTION_LOG_PATH, guarded_values, churn_probability, decision_rule, decision_threshold, verdict)
+        log_prediction(
+            PREDICTION_LOG_PATH, guarded_values, churn_probability, decision_rule, decision_threshold, verdict, input_warning
+        )
     except Exception as error:  # Logging must never break a prediction.
         st.caption(f"Warning: prediction was not logged ({type(error).__name__}).")
 
     st.subheader("Prediction Result")
+    if input_warning is not None:
+        st.warning(input_warning)
     if churn_prediction:
         st.error(f"High churn risk: {churn_probability:.1%} probability")
     else:
         st.success(f"Lower churn risk: {churn_probability:.1%} probability")
 
     cost_columns = st.columns(2)
-    cost_columns[0].metric("Expected cost if not contacted", f"{cost_if_not_contacted:,.0f}")
-    cost_columns[1].metric("Expected cost if contacted", f"{cost_if_contacted:,.0f}")
+    if decision_rule == PROFIT_RULE:
+        assumptions = report["profit_analysis"]["assumptions"]
+        contact_value = expected_contact_value(
+            churn_probability,
+            float(values["MonthlyCharges"]),
+            assumptions["offer_cost"],
+            assumptions["offer_success_rate"],
+            assumptions["retention_months"],
+        )
+        cost_columns[0].metric("Expected value of contacting", f"{contact_value:,.0f}")
+        cost_columns[1].metric("Expected value of not contacting", "0")
+        st.caption(
+            f"Value of contacting = probability x {assumptions['offer_success_rate']:.0%} saved x MonthlyCharges x "
+            f"{assumptions['retention_months']:.0f} months - offer cost {assumptions['offer_cost']:,.0f}. "
+            "The success rate is an assumption, not measured data."
+        )
+        st.caption(
+            "The profit threshold maximises total profit across all validation customers, so it does not depend on this "
+            "customer's charges. A customer can have a positive expected value and still fall below the threshold, "
+            "or a negative one and be above it."
+        )
+    else:
+        cost_columns[0].metric("Expected cost if not contacted", f"{cost_if_not_contacted:,.0f}")
+        cost_columns[1].metric("Expected cost if contacted", f"{cost_if_contacted:,.0f}")
     st.write("Decision rule:", decision_rule)
     st.write("Prediction threshold used:", f"{decision_threshold:.3f}")
 

@@ -28,6 +28,33 @@ def profit_threshold(report: dict[str, Any]) -> float | None:
     return float(profit_analysis["validation_threshold"])
 
 
+def expected_contact_value(
+    probability: float,
+    monthly_charges: float,
+    offer_cost: float,
+    success_rate: float,
+    retention_months: float,
+) -> float:
+    """Expected profit of contacting one customer, relative to not contacting them (value 0).
+
+    This is the per-customer expectation of the profit formula in evaluate.profit_curve(): the churn
+    probability stands in for the churn label.
+    """
+    return probability * success_rate * monthly_charges * retention_months - offer_cost
+
+
+def capacity_rows(report: dict[str, Any]) -> tuple[list[dict[str, Any]], str]:
+    """Capacity table whose cutoffs the app applies, and the split it came from.
+
+    Prefers the validation table; artifacts trained before it existed fall back to the test table.
+    """
+    if report.get("validation_capacity_table"):
+        return report["validation_capacity_table"], "validation"
+    if report.get("test_capacity_table"):
+        return report["test_capacity_table"], "test"
+    return [], ""
+
+
 def log_prediction(
     log_path: Path,
     inputs: dict[str, Any],
@@ -35,8 +62,12 @@ def log_prediction(
     decision_rule: str,
     threshold: float,
     verdict: str,
+    warning: str | None = None,
 ) -> dict[str, Any]:
-    """Append one prediction as a JSON line with a UTC timestamp and return the record."""
+    """Append one prediction as a JSON line with a UTC timestamp and return the record.
+
+    warning holds the input plausibility message shown to the user, or None.
+    """
     record = {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "inputs": inputs,
@@ -44,6 +75,7 @@ def log_prediction(
         "decision_rule": decision_rule,
         "threshold": float(threshold),
         "verdict": verdict,
+        "warning": warning,
     }
     log_path = Path(log_path)
     log_path.parent.mkdir(parents=True, exist_ok=True)

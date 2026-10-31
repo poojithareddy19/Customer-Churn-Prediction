@@ -34,6 +34,7 @@ from src.evaluate import (
     fold_score_summary,
     lift_table,
     logistic_odds_ratios,
+    outcomes_at_cutoffs,
     permutation_importance_table,
     profit_curve,
     summarize_predictions,
@@ -453,6 +454,14 @@ def train_model(
     calibration_frame = calibration_table(test_target.to_numpy(), test_probabilities)
     test_lift = lift_table(test_target.to_numpy(), test_probabilities)
     test_capacity = capacity_table(test_target.to_numpy(), test_probabilities)
+    # The app's capacity cutoffs come from validation, like the cost and profit thresholds: the validation
+    # probabilities are from the model calibrated on the training split only, while the deployed model is
+    # recalibrated on train plus validation. The test outcomes below are an honest check of those cutoffs.
+    validation_capacity = capacity_table(splits.validation_target.to_numpy(), evaluation.validation_probabilities)
+    test_outcomes_at_validation_cutoffs = outcomes_at_cutoffs(
+        test_target.to_numpy(), test_probabilities, validation_capacity["probability_cutoff"].to_numpy()
+    )
+    test_outcomes_at_validation_cutoffs.insert(0, "capacity", validation_capacity["capacity"].to_numpy())
     test_bootstrap = bootstrap_metrics(test_target.to_numpy(), test_probabilities, best_threshold["threshold"])
     model_comparison = [
         {"model": name, "cv_roc_auc_mean": cv_fold_scores[name]["mean"], "cv_roc_auc_std": cv_fold_scores[name]["std"]}
@@ -478,6 +487,8 @@ def train_model(
         "cv_fold_scores": cv_fold_scores,
         "test_lift_table": test_lift.to_dict(orient="records"),
         "test_capacity_table": test_capacity.to_dict(orient="records"),
+        "validation_capacity_table": validation_capacity.to_dict(orient="records"),
+        "test_outcomes_at_validation_capacity_cutoffs": test_outcomes_at_validation_cutoffs.to_dict(orient="records"),
         "test_bootstrap_ci": test_bootstrap,
         "model_comparison": model_comparison,
         "logistic_odds_ratios": odds_ratios.to_dict(orient="records"),

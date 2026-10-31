@@ -14,7 +14,7 @@ Five candidate pipelines across three model families (logistic regression, Rando
 **Headline result:** at the profit-maximising threshold of 0.34, the model contacts 37% of the 1,409 test customers and reaches 75.1% of churners (281 of 374) at 53.7% precision, for an expected profit of 42,870 under the stated assumptions. Test ROC-AUC is 0.836 (95% CI 0.815 to 0.859), against a majority-class baseline that catches zero churners.
 
 <p align="center">
-  <img src="docs/images/app_prediction.png" alt="Streamlit app showing a 56.5% churn probability for a month-to-month fiber customer, flagged as high risk at the 0.34 profit threshold, with the top SHAP reasons" width="720">
+  <img src="docs/images/app_prediction.png" alt="Streamlit app showing a 56.5% churn probability for a month-to-month fiber customer, flagged as high risk at the 0.34 profit threshold, with the TotalCharges warning, the expected value of contacting (77) and the top SHAP reasons" width="720">
 </p>
 
 **Contents:** [Findings](#findings-and-recommendations) · [Problem](#problem) · [Dataset](#dataset) · [Pipeline](#pipeline) · [First version](#what-was-wrong-with-the-first-version) · [Results](#results) · [Feature importance](#feature-importance) · [Segment analysis](#segment-analysis) · [Monitoring](#monitoring) · [Project structure](#project-structure) · [Installation](#installation) · [Usage](#usage) · [Design decisions](#design-decisions) · [Limitations](#limitations) · [Roadmap](#roadmap)
@@ -98,7 +98,7 @@ All training and inference code lives in `src/`. The notebook is kept as the ori
    A `ColumnTransformer` scales the four numeric columns and one-hot encodes the fifteen categorical columns with `handle_unknown="ignore"`. Everything is fitted inside the model pipeline, so there are no separate encoder files and no leakage from the test set.
 
 3. **Splitting** (`src/train.py`)
-   Stratified 60/20/20 train, validation, test split with `random_state=42`. The validation split is used only to choose the decision threshold. The test split is touched once, at the end.
+   Stratified 60/20/20 train, validation, test split with `random_state=42`. The validation split is used only to choose the decision thresholds (cost and profit) and the capacity cutoffs the app applies. The test split is touched once, at the end.
 
 4. **Candidate comparison**
    Five pipelines across three model families are scored by ROC-AUC under 5-fold stratified cross-validation on the training split: balanced logistic regression, Random Forest (class-weighted and SMOTE), and XGBoost (class-weighted and SMOTE). SMOTE is applied through an `imblearn` pipeline, so resampling happens inside each fold on training data only. Per-fold scores are stored, not only the mean.
@@ -116,7 +116,7 @@ All training and inference code lives in `src/`. The notebook is kept as the ori
    The calibrated pipeline, the threshold, the feature column order, and the full report are saved together to `artifacts/churn_model.joblib`. A human-readable copy of the report is written to `artifacts/training_report.json`, with the run timestamp and git commit. If MLflow is installed (`requirements-dev.txt`), the run is also logged there.
 
 9. **Deployment** (`app.py`)
-   Streamlit app that loads the artifact, exposes all 19 inputs, applies consistency guards (no internet service implies no add-ons, no phone service implies no multiple lines), and shows the probability, verdict, and expected cost of each decision. Three decision rules are offered: the profit threshold (the default, 0.34) and the cost threshold (0.08), both adjustable with a slider, and a capacity rule (top N% by score). A "Why this score?" panel shows the top five SHAP contributions, and every prediction is appended to `logs/predictions.jsonl`.
+   Streamlit app that loads the artifact, exposes all 19 inputs, applies consistency guards (no internet service implies no add-ons, no phone service implies no multiple lines), and shows the probability and verdict. Three decision rules are offered: the profit threshold (the default, 0.34) and the cost threshold (0.08), both adjustable with a slider, and a capacity rule (top N% by score, using probability cutoffs chosen on the validation split). Under the profit rule the app shows the expected value of contacting the customer (probability x 30% assumed success rate x MonthlyCharges x 12 months - 65 offer cost) against 0 for not contacting; under the cost and capacity rules it shows the expected cost of each decision. If `TotalCharges` does not fit `tenure` x `MonthlyCharges` (a ratio outside 0.68 to 1.58, the range seen in the data, or a positive total at tenure 0), a warning is shown; the prediction still uses the values as entered. A "Why this score?" panel shows the top five SHAP contributions, and every prediction is appended to `logs/predictions.jsonl`, with the warning if there was one.
 
 ## What was wrong with the first version
 
@@ -237,6 +237,8 @@ Test split, ranked by predicted probability:
 | 5      | 22.7%      | 0.85 | 87.7%                        |
 | 6 to 10 | 1.4% to 14.9% | 0.05 to 0.56 | 93.3% to 100% |
 
+Test split, contacting the top share of its own customers (an evaluation result; these cutoffs are not used by the app):
+
 | Capacity | Contacted | Probability cutoff | Recall | Precision | Expected cost |
 | -------- | --------- | ------------------ | ------ | --------- | ------------- |
 | 5%       | 71        | 0.720              | 0.155  | 0.817     | 247,325       |
@@ -246,7 +248,20 @@ Test split, ranked by predicted probability:
 | 40%      | 564       | 0.294              | 0.791  | 0.525     | 78,260        |
 | 50%      | 705       | 0.160              | 0.877  | 0.465     | 60,385        |
 
-Expected cost uses the default costs (65 per offer, 780 per missed churner). Of the capacities listed, 50% has the lowest expected cost; the cost threshold of 0.08 (63% contacted, expected cost 51,090) is lower still. The app's capacity mode uses the probability cutoffs in this table.
+Expected cost uses the default costs (65 per offer, 780 per missed churner). Of the capacities listed, 50% has the lowest expected cost; the cost threshold of 0.08 (63% contacted, expected cost 51,090) is lower still.
+
+The app's capacity mode uses cutoffs chosen on the validation split instead (`validation_capacity_table` in the report), so the test split stays an evaluation set. As with the cost and profit thresholds, those cutoffs come from the model calibrated on the training split only, while the deployed model is recalibrated on train plus validation. Applying them to the test split (`test_outcomes_at_validation_capacity_cutoffs`) shows how closely a fixed cutoff hits the intended share on new customers:
+
+| Capacity | Validation cutoff | Test contacted | Test share | Recall | Precision | Expected cost |
+| -------- | ----------------- | -------------- | ---------- | ------ | --------- | ------------- |
+| 5%       | 0.726             | 67             | 4.8%       | 0.150  | 0.836     | 248,755       |
+| 10%      | 0.661             | 147            | 10.4%      | 0.281  | 0.714     | 212,550       |
+| 20%      | 0.538             | 308            | 21.9%      | 0.519  | 0.630     | 147,810       |
+| 30%      | 0.405             | 432            | 30.7%      | 0.652  | 0.565     | 113,620       |
+| 40%      | 0.276             | 578            | 41.0%      | 0.797  | 0.516     | 77,480        |
+| 50%      | 0.171             | 682            | 48.4%      | 0.861  | 0.472     | 63,960        |
+
+The realised share stays within about two percentage points of the target.
 
 ### About the threshold
 
@@ -326,7 +341,8 @@ The app appends every prediction to `logs/predictions.jsonl`. Streamlit Cloud st
 │   ├── features.py                            # dataset loading, preprocessing, form schema, cost and profit assumptions
 │   ├── train.py                               # candidate comparison, tuning, calibration, report and artifact export
 │   ├── evaluate.py                            # metrics, cost curve, lift, capacity, bootstrap, odds ratios, profit curve
-│   ├── app_helpers.py                         # SHAP explanation, prediction logging, report key fallback
+│   ├── app_helpers.py                         # SHAP explanation, prediction logging, report key fallback, profit-mode value
+│   ├── score.py                               # batch scoring of a CSV (python -m src.score)
 │   ├── segments.py                            # DuckDB query runner and Wilson interval
 │   ├── experiment.py                          # sample size, SRM check, A/B analysis
 │   └── monitoring.py                          # population stability index
@@ -343,15 +359,16 @@ The app appends every prediction to `logs/predictions.jsonl`. Streamlit Cloud st
 ├── docs/
 │   ├── experiment_plan.md                     # retention offer experiment design
 │   └── images/                                # README screenshot and charts
-├── tests/                                     # pytest suite, 43 tests across 7 modules
+├── tests/                                     # pytest suite, 62 tests across 8 modules (incl. test_score.py)
 ├── artifacts/                                 # committed; regenerate with python -m src.train
 │   ├── churn_model.joblib                     # {model, threshold, report, feature_columns}
 │   └── training_report.json
 ├── .github/workflows/ci.yml                   # runs the tests on push and pull request
 ├── Customer_Churn_Prediction_Using_ML.ipynb   # original EDA and first model (superseded by src/)
 ├── WA_Fn-UseC_-Telco-Customer-Churn.csv       # dataset
-├── requirements.txt                           # app, training and analysis dependencies
+├── requirements.txt                           # app, training and analysis dependencies (SciPy pinned explicitly)
 ├── requirements-dev.txt                       # adds pytest and MLflow
+├── DOCUMENTATION.md                           # technical reference: behaviour, usage, testing, limitations
 └── README.md
 ```
 
@@ -383,6 +400,14 @@ python -m streamlit run app.py
 ```
 
 If `artifacts/churn_model.joblib` is ever missing, the app trains on first load and shows a warning while it does so. Predictions are appended to `logs/predictions.jsonl` (ignored by git).
+
+Score a CSV of customers in batch with the saved model. The input needs the 19 feature columns (`customerID` is kept if present); the output adds `churn_probability`, `risk_rank` (1 = highest), `decision_rule`, `threshold`, `flagged` and `charges_warning`:
+
+```bash
+python -m src.score --input WA_Fn-UseC_-Telco-Customer-Churn.csv --output scored.csv --rule capacity --capacity 0.2
+```
+
+`--rule` is `profit` (default, the report's profit threshold), `cost` (the threshold saved with the model) or `capacity` (the top N% of the input file by score, unlike the app, which applies a fixed validation cutoff to one customer at a time). `--threshold` overrides the profit or cost threshold. The command never trains: it exits with an error if the artifact is missing, and batch predictions are not written to `logs/predictions.jsonl`.
 
 Regenerate the analysis reports (run after retraining so they use the current model):
 
@@ -421,7 +446,7 @@ python -m src.train
 
 The profit analysis in the report uses three more assumptions, also read at training time: `CHURN_OFFER_COST` (default 65), `CHURN_OFFER_SUCCESS_RATE` (default 0.30, the share of contacted churners who stay, which is an assumption and not measured in this data) and `CHURN_RETENTION_MONTHS` (default 12). They set the profit threshold the app uses by default, and do not change the cost threshold saved with the model.
 
-Run the 43 tests (installs pytest and MLflow on top of the app dependencies). With MLflow installed, `python -m src.train` also logs each run to a local `mlflow.db` (ignored by git); view it with `mlflow ui --backend-store-uri sqlite:///mlflow.db`.
+Run the 62 tests (installs pytest and MLflow on top of the app dependencies). With MLflow installed, `python -m src.train` also logs each run to a local `mlflow.db` (ignored by git); view it with `mlflow ui --backend-store-uri sqlite:///mlflow.db`.
 
 ```bash
 pip install -r requirements-dev.txt
@@ -463,6 +488,7 @@ python -m pytest -q
 - [x] Probability calibration and Brier score reporting
 - [x] Make the cost assumptions configurable through environment variables
 - [x] Capacity-based thresholding (top N% of customers by probability)
+- [x] Batch scoring from the command line
 - [x] SHAP values for per-customer explanations in the app
 - [x] Bootstrap confidence intervals, lift tables and seed stability
 - [x] Retention experiment design with power analysis

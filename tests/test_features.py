@@ -1,4 +1,6 @@
-from src.features import FEATURE_COLUMNS, apply_internet_guard, build_input_frame, load_dataset
+import copy
+
+from src.features import FEATURE_COLUMNS, FORM_FIELDS, apply_internet_guard, build_input_frame, charges_warning, load_dataset
 
 
 def test_internet_guard_forces_add_on_fields_to_no_internet_service():
@@ -53,3 +55,29 @@ def test_load_dataset_fills_unbilled_total_charges_with_zero():
     assert frame["TotalCharges"].isna().sum() == 0
     assert (frame.loc[frame["tenure"] == 0, "TotalCharges"] == 0.0).all()
     assert set(frame["Churn"].unique()) == {0, 1}
+
+
+def test_charges_warning_silent_for_every_real_customer():
+    frame = load_dataset()
+    warnings = [charges_warning(row) for row in frame[FEATURE_COLUMNS].to_dict(orient="records")]
+    assert len(warnings) == 7043
+    assert all(warning is None for warning in warnings)
+
+
+def test_charges_warning_flags_implausible_form_defaults():
+    defaults = {field.name: field.default for field in FORM_FIELDS}
+    # 1500 / (12 * 70) is about 1.79, above every customer in the data.
+    assert charges_warning(defaults) is not None
+    assert charges_warning({"tenure": 12, "MonthlyCharges": 70.0, "TotalCharges": 840.0}) is None
+
+
+def test_charges_warning_flags_positive_total_with_zero_tenure():
+    assert charges_warning({"tenure": 0, "MonthlyCharges": 70.0, "TotalCharges": 70.0}) is not None
+    assert charges_warning({"tenure": 0, "MonthlyCharges": 70.0, "TotalCharges": 0.0}) is None
+
+
+def test_charges_warning_does_not_mutate_input():
+    values = {field.name: field.default for field in FORM_FIELDS}
+    original = copy.deepcopy(values)
+    charges_warning(values)
+    assert values == original

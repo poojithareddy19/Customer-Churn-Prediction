@@ -49,6 +49,12 @@ OFFER_COST = float(os.environ.get("CHURN_OFFER_COST", 65.0))
 OFFER_SUCCESS_RATE = float(os.environ.get("CHURN_OFFER_SUCCESS_RATE", 0.30))
 RETENTION_MONTHS = float(os.environ.get("CHURN_RETENTION_MONTHS", 12))
 
+# Plausible range of TotalCharges / (tenure * MonthlyCharges). In the dataset (rows with tenure > 0) the ratio
+# runs from 0.689 to 1.574 (p1 0.855, median 1.000, p99 1.159), because monthly charges change over time.
+# The bounds are the observed min and max rounded outward, so no real customer triggers the warning.
+CHARGES_RATIO_MIN = 0.68
+CHARGES_RATIO_MAX = 1.58
+
 FIELD_OPTIONS: dict[str, list[Any]] = {
     "gender": ["Female", "Male"],
     "SeniorCitizen": [0, 1],
@@ -110,17 +116,29 @@ FORM_FIELDS = [
 ]
 
 
-def load_dataset(dataset_path: Path = DATASET_PATH) -> pd.DataFrame:
-    frame = pd.read_csv(dataset_path)
-    frame = frame.drop(columns=[CUSTOMER_ID_COLUMN], errors="ignore")
+def clean_frame(frame: pd.DataFrame, require_target: bool = False) -> pd.DataFrame:
+    """Apply the dataset cleaning steps to a copy of a raw Telco-format frame.
+
+    The Churn column is mapped to 0/1 when present; require_target=True makes it mandatory.
+    """
+    frame = frame.copy()
     frame["TotalCharges"] = pd.to_numeric(frame["TotalCharges"], errors="coerce")
     # Blank TotalCharges only occurs for customers with tenure 0 (not billed yet), so 0.0 is the
     # semantically correct value. The median imputer in the pipeline stays as a safety net.
     not_yet_billed = frame["TotalCharges"].isna() & (frame["tenure"] == 0)
     frame.loc[not_yet_billed, "TotalCharges"] = 0.0
-    frame[TARGET_COLUMN] = frame[TARGET_COLUMN].map({"No": 0, "Yes": 1})
+    if TARGET_COLUMN in frame:
+        frame[TARGET_COLUMN] = frame[TARGET_COLUMN].map({"No": 0, "Yes": 1})
+    elif require_target:
+        raise ValueError(f"missing target column {TARGET_COLUMN}")
     frame["SeniorCitizen"] = frame["SeniorCitizen"].astype(int)
     return frame
+
+
+def load_dataset(dataset_path: Path = DATASET_PATH) -> pd.DataFrame:
+    frame = pd.read_csv(dataset_path)
+    frame = frame.drop(columns=[CUSTOMER_ID_COLUMN], errors="ignore")
+    return clean_frame(frame, require_target=True)
 
 
 def split_features_target(frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
@@ -167,6 +185,29 @@ def apply_internet_guard(values: dict[str, Any]) -> dict[str, Any]:
         ]:
             guarded[field] = "No internet service"
     return guarded
+
+
+def charges_warning(values: dict[str, Any]) -> str | None:
+    """Message when TotalCharges does not fit tenure and MonthlyCharges, otherwise None. Does not change the inputs."""
+    tenure = float(values["tenure"])
+    monthly = float(values["MonthlyCharges"])
+    total = float(values["TotalCharges"])
+    if pd.isna(tenure) or pd.isna(monthly) or pd.isna(total):
+        return None
+    if tenure == 0:
+        if total > 0:
+            return f"Total Charges is {total:,.2f} but tenure is 0; customers with tenure 0 have not been billed yet."
+        return None
+    expected = tenure * monthly
+    if expected == 0:
+        return None if total == 0 else f"Total Charges is {total:,.2f} but Monthly Charges is 0."
+    ratio = total / expected
+    if CHARGES_RATIO_MIN <= ratio <= CHARGES_RATIO_MAX:
+        return None
+    return (
+        f"Total Charges ({total:,.2f}) is {ratio:.2f} times tenure x Monthly Charges ({expected:,.2f}); in the training "
+        f"data this ratio is between {CHARGES_RATIO_MIN} and {CHARGES_RATIO_MAX}. The prediction uses the values as entered."
+    )
 
 
 def original_feature_name(transformed_name: str) -> str:

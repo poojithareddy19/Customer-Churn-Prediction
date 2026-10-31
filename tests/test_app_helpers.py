@@ -2,7 +2,7 @@ import joblib
 import numpy as np
 import pytest
 
-from src.app_helpers import explain_prediction, profit_threshold, report_cost
+from src.app_helpers import capacity_rows, expected_contact_value, explain_prediction, profit_threshold, report_cost
 from src.features import FEATURE_COLUMNS, load_dataset, original_feature_name, readable_feature_name
 from src.train import MODEL_PATH
 
@@ -25,6 +25,51 @@ def test_profit_threshold_reads_validation_threshold():
 
 def test_profit_threshold_is_none_for_older_artifacts():
     assert profit_threshold({"false_positive_cost": 65.0}) is None
+
+
+def test_expected_contact_value_is_minus_offer_cost_at_zero_probability():
+    assert expected_contact_value(0.0, 70.0, 65.0, 0.3, 12) == -65.0
+
+
+def test_expected_contact_value_hand_computed():
+    assert expected_contact_value(0.5, 70.0, 65.0, 0.3, 12) == pytest.approx(0.5 * 0.3 * 70 * 12 - 65)
+    assert expected_contact_value(0.5, 70.0, 65.0, 0.3, 12) == pytest.approx(61.0)
+
+
+def test_expected_contact_value_matches_profit_curve():
+    from src.evaluate import profit_curve
+
+    rng = np.random.default_rng(0)
+    target = rng.integers(0, 2, 50)
+    probabilities = rng.uniform(0, 1, 50)
+    charges = rng.uniform(20, 110, 50)
+    threshold = 0.5
+
+    curve, _ = profit_curve(target, probabilities, charges, offer_cost=65.0, success_rate=0.3, months=12)
+    curve_profit = curve.loc[np.isclose(curve["threshold"], threshold), "profit"].item()
+
+    contacted = probabilities >= threshold
+    # With the true label in place of the probability, the summed per-customer values are the realised profit.
+    summed = sum(
+        expected_contact_value(float(label), float(charge), 65.0, 0.3, 12)
+        for label, charge in zip(target[contacted], charges[contacted])
+    )
+    assert summed == pytest.approx(curve_profit)
+
+
+def test_capacity_rows_prefers_validation_table():
+    validation = [{"capacity": 0.2, "probability_cutoff": 0.55}]
+    test = [{"capacity": 0.2, "probability_cutoff": 0.56}]
+    assert capacity_rows({"validation_capacity_table": validation, "test_capacity_table": test}) == (validation, "validation")
+
+
+def test_capacity_rows_falls_back_to_test_table_for_older_artifacts():
+    test = [{"capacity": 0.2, "probability_cutoff": 0.56}]
+    assert capacity_rows({"test_capacity_table": test}) == (test, "test")
+
+
+def test_capacity_rows_empty_when_absent():
+    assert capacity_rows({"false_positive_cost": 65.0}) == ([], "")
 
 
 @pytest.mark.parametrize(
@@ -91,4 +136,17 @@ def test_log_prediction_appends_json_lines(tmp_path):
     assert records[0]["inputs"]["Contract"] == "Month-to-month"
     assert records[1]["decision_rule"] == "Capacity (top N%)"
     assert records[0]["timestamp_utc"].endswith("+00:00")
-    assert set(records[0]) == {"timestamp_utc", "inputs", "probability", "decision_rule", "threshold", "verdict"}
+    assert set(records[0]) == {"timestamp_utc", "inputs", "probability", "decision_rule", "threshold", "verdict", "warning"}
+    assert records[0]["warning"] is None
+
+
+def test_log_prediction_records_optional_warning(tmp_path):
+    import json
+
+    from src.app_helpers import log_prediction
+
+    log_path = tmp_path / "predictions.jsonl"
+    log_prediction(log_path, {"tenure": 0}, 0.4, "Cost threshold", 0.08, "high risk", warning="tenure is 0")
+
+    record = json.loads(log_path.read_text(encoding="utf-8"))
+    assert record["warning"] == "tenure is 0"
