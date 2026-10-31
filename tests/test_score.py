@@ -48,6 +48,28 @@ def test_scores_match_the_app_path(tmp_path, sample_csv):
     assert np.allclose(scored["churn_probability"], app_probabilities, rtol=0, atol=1e-12)
 
 
+def test_inconsistent_rows_are_guarded_like_the_app(tmp_path):
+    # The real data is already consistent, so build rows the guard has to correct.
+    bundle = load_or_train_bundle()
+    raw = pd.read_csv(DATASET_PATH)
+    no_internet = raw[raw["InternetService"] == "No"].head(1).copy()
+    for field in ["OnlineSecurity", "OnlineBackup", "DeviceProtection", "TechSupport", "StreamingTV", "StreamingMovies"]:
+        no_internet[field] = "Yes"
+    no_phone = raw[raw["PhoneService"] == "No"].head(1).copy()
+    no_phone["MultipleLines"] = "Yes"
+    input_path = tmp_path / "inconsistent.csv"
+    pd.concat([no_internet, no_phone]).to_csv(input_path, index=False)
+
+    _, output_path = _run(tmp_path, input_path)
+    scored = pd.read_csv(output_path)
+
+    rows = clean_frame(pd.read_csv(input_path))[FEATURE_COLUMNS].to_dict(orient="records")
+    guarded = [float(bundle.model.predict_proba(build_input_frame(apply_internet_guard(row), bundle.feature_columns))[0, 1]) for row in rows]
+    unguarded = [float(bundle.model.predict_proba(build_input_frame(row, bundle.feature_columns))[0, 1]) for row in rows]
+    assert np.allclose(scored["churn_probability"], guarded, rtol=0, atol=1e-12)
+    assert not np.allclose(scored["churn_probability"], unguarded, rtol=0, atol=1e-12)
+
+
 def test_capacity_rule_flags_top_share(tmp_path, sample_csv):
     code, output_path = _run(tmp_path, sample_csv, "--rule", "capacity", "--capacity", "0.2")
 
