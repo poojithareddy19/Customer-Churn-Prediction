@@ -359,7 +359,7 @@ The app appends every prediction to `logs/predictions.jsonl`. Streamlit Cloud st
 ├── docs/
 │   ├── experiment_plan.md                     # retention offer experiment design
 │   └── images/                                # README screenshot and charts
-├── tests/                                     # pytest suite, 62 tests across 8 modules (incl. test_score.py)
+├── tests/                                     # pytest suite, 66 tests across 8 modules (incl. test_score.py)
 ├── artifacts/                                 # committed; regenerate with python -m src.train
 │   ├── churn_model.joblib                     # {model, threshold, report, feature_columns}
 │   └── training_report.json
@@ -401,13 +401,13 @@ python -m streamlit run app.py
 
 If `artifacts/churn_model.joblib` is ever missing, the app trains on first load and shows a warning while it does so. Predictions are appended to `logs/predictions.jsonl` (ignored by git).
 
-Score a CSV of customers in batch with the saved model. The input needs the 19 feature columns (`customerID` is kept if present); the output adds `churn_probability`, `risk_rank` (1 = highest), `decision_rule`, `threshold`, `flagged` and `charges_warning`:
+Score a CSV of customers in batch with the saved model. The input needs the 19 feature columns (`customerID` is kept if present); the output adds `churn_probability`, `risk_rank` (1 = highest), `decision_rule`, `threshold`, `flagged`, `charges_warning` and `category_warning`:
 
 ```bash
 python -m src.score --input WA_Fn-UseC_-Telco-Customer-Churn.csv --output scored.csv --rule capacity --capacity 0.2
 ```
 
-`--rule` is `profit` (default, the report's profit threshold), `cost` (the threshold saved with the model) or `capacity` (the top N% of the input file by score, unlike the app, which applies a fixed validation cutoff to one customer at a time). `--threshold` overrides the profit or cost threshold. The command never trains: it exits with an error if the artifact is missing, and batch predictions are not written to `logs/predictions.jsonl`.
+`--rule` is `profit` (default, the report's profit threshold), `cost` (the threshold saved with the model) or `capacity` (the top N% of the input file by score, unlike the app, which applies a fixed validation cutoff to one customer at a time). `--threshold` overrides the profit or cost threshold, and `decision_rule` then reads `profit (override)` or `cost (override)`. Rows with a blank or unknown category value are still scored but named in `category_warning`. The command never trains: it exits with an error if the artifact is missing, and batch predictions are not written to `logs/predictions.jsonl`.
 
 Regenerate the analysis reports (run after retraining so they use the current model):
 
@@ -446,7 +446,7 @@ python -m src.train
 
 The profit analysis in the report uses three more assumptions, also read at training time: `CHURN_OFFER_COST` (default 65), `CHURN_OFFER_SUCCESS_RATE` (default 0.30, the share of contacted churners who stay, which is an assumption and not measured in this data) and `CHURN_RETENTION_MONTHS` (default 12). They set the profit threshold the app uses by default, and do not change the cost threshold saved with the model.
 
-Run the 62 tests (installs pytest and MLflow on top of the app dependencies). With MLflow installed, `python -m src.train` also logs each run to a local `mlflow.db` (ignored by git); view it with `mlflow ui --backend-store-uri sqlite:///mlflow.db`.
+Run the 66 tests (installs pytest and MLflow on top of the app dependencies). With MLflow installed, `python -m src.train` also logs each run to a local `mlflow.db` (ignored by git); view it with `mlflow ui --backend-store-uri sqlite:///mlflow.db`.
 
 ```bash
 pip install -r requirements-dev.txt
