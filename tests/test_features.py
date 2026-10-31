@@ -1,6 +1,16 @@
 import copy
 
-from src.features import FEATURE_COLUMNS, FORM_FIELDS, apply_internet_guard, build_input_frame, charges_warning, load_dataset
+import pandas as pd
+
+from src.features import (
+    FEATURE_COLUMNS,
+    FORM_FIELDS,
+    apply_internet_guard,
+    build_input_frame,
+    category_warning,
+    charges_warning,
+    load_dataset,
+)
 
 
 def test_internet_guard_forces_add_on_fields_to_no_internet_service():
@@ -81,3 +91,23 @@ def test_charges_warning_does_not_mutate_input():
     original = copy.deepcopy(values)
     charges_warning(values)
     assert values == original
+
+
+def test_category_warning_silent_for_every_real_customer_and_the_form():
+    rows = load_dataset()[FEATURE_COLUMNS].to_dict(orient="records")
+    assert all(category_warning(row) is None for row in rows)
+    assert category_warning({field.name: field.default for field in FORM_FIELDS}) is None
+
+
+def test_category_warning_names_unknown_and_blank_fields():
+    values = {field.name: field.default for field in FORM_FIELDS}
+    values["Contract"] = "Monthly"
+    values["PaymentMethod"] = float("nan")
+
+    message = category_warning(values)
+
+    assert "Contract has unknown value 'Monthly'" in message
+    assert "PaymentMethod is blank" in message
+    # The input is left as it was.
+    assert values["Contract"] == "Monthly"
+    assert pd.isna(values["PaymentMethod"])

@@ -11,8 +11,10 @@ Rows go through the same cleaning and consistency guards as the app. Rules:
 - capacity: flag the top share of this input file by score (ties keep file order). This differs from the
   app, which applies a fixed probability cutoff from the training report to one customer at a time.
 
---threshold overrides the profit or cost threshold. The command never trains: it fails if the artifact is
-missing. Batch predictions are not written to the app's prediction log.
+--threshold overrides the profit or cost threshold, and decision_rule then reads "profit (override)" or
+"cost (override)". Rows with a blank or unknown category value are still scored (the encoder ignores unknown
+values and the imputer fills blanks) and named in the category_warning column. The command never trains: it
+fails if the artifact is missing. Batch predictions are not written to the app's prediction log.
 """
 from __future__ import annotations
 
@@ -29,7 +31,7 @@ if __package__ in {None, ""}:
     sys.path.append(str(Path(__file__).resolve().parents[1]))
 from src.app_helpers import profit_threshold
 from src.evaluate import _rank_order
-from src.features import CUSTOMER_ID_COLUMN, apply_internet_guard, charges_warning, clean_frame
+from src.features import CUSTOMER_ID_COLUMN, apply_internet_guard, category_warning, charges_warning, clean_frame
 from src.train import MODEL_PATH, TrainingBundle, load_or_train_bundle
 
 RULES = ("profit", "cost", "capacity")
@@ -92,7 +94,9 @@ def score_frame(
         flagged_count = min(len(probabilities), math.ceil(round(capacity * len(probabilities), 9)))
         flagged = ranks <= flagged_count
         used_threshold: float | None = None
+        rule_label = rule
     else:
+        rule_label = rule if threshold is None else f"{rule} (override)"
         if threshold is None:
             threshold = profit_threshold(bundle.report) if rule == "profit" else bundle.threshold
             if threshold is None:
@@ -105,10 +109,11 @@ def score_frame(
         output[CUSTOMER_ID_COLUMN] = raw[CUSTOMER_ID_COLUMN].to_numpy()
     output["churn_probability"] = probabilities
     output["risk_rank"] = ranks
-    output["decision_rule"] = rule
+    output["decision_rule"] = rule_label
     output["threshold"] = used_threshold
     output["flagged"] = flagged
     output["charges_warning"] = [charges_warning(row) for row in guarded]
+    output["category_warning"] = [category_warning(row) for row in guarded]
     return pd.DataFrame(output)
 
 
@@ -147,6 +152,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {error}", file=sys.stderr)
         return 1
     print(f"Scored {len(scored)} customers, flagged {int(scored['flagged'].sum())}, wrote {args.output}")
+    unknown = int(scored["category_warning"].notna().sum())
+    if unknown:
+        print(
+            f"Warning: blank or unknown category values in {unknown} of {len(scored)} rows; "
+            "see the category_warning column"
+        )
     return 0
 
 
